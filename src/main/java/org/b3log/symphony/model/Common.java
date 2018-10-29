@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.model;
 
@@ -21,10 +21,25 @@ package org.b3log.symphony.model;
  * This class defines all common model relevant keys.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.62.1.13, Aug 15, 2017
+ * @version 1.73.0.1, Sep 14, 2018
  * @since 0.2.0
  */
 public final class Common {
+
+    /**
+     * Key of offered.
+     */
+    public static final String OFFERED = "offered";
+
+    /**
+     * Key of query.
+     */
+    public static final String QUERY = "query";
+
+    /**
+     * Key of code.
+     */
+    public static final String CODE = "code";
 
     /**
      * Key of command.
@@ -40,6 +55,11 @@ public final class Common {
      * Key of add article domains.
      */
     public static final String ADD_ARTICLE_DOMAINS = "addArticleDomains";
+
+    /**
+     * Key of all domains.
+     */
+    public static final String ALL_DOMAINS = "allDomains";
 
     /**
      * Key of data.
@@ -142,11 +162,6 @@ public final class Common {
     public static final String TIMEZONES = "timezones";
 
     /**
-     * Key of forge.
-     */
-    public static final String FORGE = "forge";
-
-    /**
      * Key of selected.
      */
     public static final String SELECTED = "selected";
@@ -195,6 +210,11 @@ public final class Common {
      * Max length of UA.
      */
     public static final int MAX_LENGTH_UA = 255;
+
+    /**
+     * Max length of URL.
+     */
+    public static final int MAX_LENGTH_URL = 255;
 
     /**
      * Key of words.
@@ -265,6 +285,11 @@ public final class Common {
      * Key of CSRF token.
      */
     public static final String CSRF_TOKEN = "csrfToken";
+
+    /**
+     * Key of marked engine available.
+     */
+    public static final String MARKED_AVAILABLE = "markedAvailable";
 
     /**
      * Key of city.
@@ -462,14 +487,24 @@ public final class Common {
     public static final String RECENT = "recent";
 
     /**
-     * Key of timeline.
+     * Key of qna.
      */
-    public static final String TIMELINE = "timeline";
+    public static final String QNA = "qna";
 
     /**
-     * Key of timelines.
+     * Key of watch.
      */
-    public static final String TIMELINES = "timelines";
+    public static final String WATCH = "watch";
+
+    /**
+     * Key of watching articles.
+     */
+    public static final String WATCHING_ARTICLES = "watchingArticles";
+
+    /**
+     * Key of watching breezemoons.
+     */
+    public static final String WATCHING_BREEZEMOONS = "watchingBreezemoons";
 
     /**
      * Key of hot articles.
@@ -552,11 +587,6 @@ public final class Common {
     public static final String INDEX = "index";
 
     /**
-     * Key of user id.
-     */
-    public static final String USER_ID = "userId";
-
-    /**
      * Key of user home articles.
      */
     public static final String USER_HOME_ARTICLES = "userHomeArticles";
@@ -565,6 +595,11 @@ public final class Common {
      * Key of user home comments.
      */
     public static final String USER_HOME_COMMENTS = "userHomeComments";
+
+    /**
+     * Key of user home breezemoons.
+     */
+    public static final String USER_HOME_BREEZEMOONS = "userHomeBreezemoons";
 
     /**
      * Key of user home following users.
@@ -727,19 +762,9 @@ public final class Common {
     public static final String THUMBNAIL_URL = "thumbnailURL";
 
     /**
-     * Key of thumbnail update time.
-     */
-    public static final String THUMBNAIL_UPDATE_TIME = "thumbnailUpdateTime";
-
-    /**
      * Key of URL.
      */
     public static final String URL = "url";
-
-    /**
-     * Key of update time.
-     */
-    public static final String UPDATE_TIME = "updateTime";
 
     /**
      * Key of Create time.
@@ -760,6 +785,31 @@ public final class Common {
      * Key of site visit statistic code.
      */
     public static final String SITE_VISIT_STAT_CODE = "siteVisitStatCode";
+
+    /**
+     * Key of macro head PC.
+     */
+    public static final String MACRO_HEAD_PC_CODE = "macroHeadPCCode";
+
+    /**
+     * Key of macro head mobile code.
+     */
+    public static final String MACRO_HEAD_MOBILE_CODE = "macroHeadMobileCode";
+
+    /**
+     * Key of footer PC code.
+     */
+    public static final String FOOTER_PC_CODE = "footerPCCode";
+
+    /**
+     * Key of footer mobile code.
+     */
+    public static final String FOOTER_MOBILE_CODE = "footerMobileCode";
+
+    /**
+     * Key of footer bei an hao.
+     */
+    public static final String FOOTER_BEI_AN_HAO = "footerBeiAnHao";
 
     /**
      * Key of online visitor count.
@@ -787,14 +837,19 @@ public final class Common {
     public static final String ARTICLE_LIST_CHANNEL_CNT = "articleListChannelCnt";
 
     /**
+     * Key of thread count.
+     */
+    public static final String THREAD_CNT = "threadCnt";
+
+    /**
+     * Key of DB connection count.
+     */
+    public static final String DB_CONN_CNT = "dbConnCnt";
+
+    /**
      * Key of symphony key.
      */
     public static final String SYMPHONY_KEY = "symphonyKey";
-
-    /**
-     * Key of from client.
-     */
-    public static final String FROM_CLIENT = "fromClient";
 
     /**
      * Key of article comments page size.
@@ -815,11 +870,6 @@ public final class Common {
      * Key of usernames.
      */
     public static final String USER_NAMES = "userNames";
-
-    /**
-     * Key of username or email.
-     */
-    public static final String USER_NAME_OR_EMAIL = "userNameOrEmail";
 
     /**
      * Key of operation.
@@ -875,6 +925,16 @@ public final class Common {
      * Key of top checkin users.
      */
     public static final String TOP_CHECKIN_USERS = "topCheckinUsers";
+
+    /**
+     * Key of top links.
+     */
+    public static final String TOP_LINKS = "topLinks";
+
+    /**
+     * Key of top.
+     */
+    public static final String TOP = "top";
 
     /**
      * Private constructor.

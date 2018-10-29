@@ -1,26 +1,26 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -30,19 +30,18 @@ import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.latke.util.CollectionUtils;
 import org.b3log.latke.util.Paginator;
+import org.b3log.latke.util.Times;
+import org.b3log.latke.util.URLs;
 import org.b3log.symphony.model.*;
 import org.b3log.symphony.repository.FollowRepository;
 import org.b3log.symphony.repository.PointtransferRepository;
 import org.b3log.symphony.repository.UserRepository;
 import org.b3log.symphony.util.Sessions;
-import org.b3log.symphony.util.Times;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.util.*;
 
 /**
@@ -50,7 +49,7 @@ import java.util.*;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://zephyr.b3log.org">Zephyr</a>
- * @version 1.8.6.13, Apr 23, 2017
+ * @version 1.8.7.1, Jal 28, 2018
  * @since 0.2.0
  */
 @Service
@@ -64,7 +63,7 @@ public class UserQueryService {
     /**
      * All usernames.
      */
-    public static final List<JSONObject> USER_NAMES = Collections.synchronizedList(new ArrayList<JSONObject>());
+    public static final List<JSONObject> USER_NAMES = Collections.synchronizedList(new ArrayList<>());
 
     /**
      * User repository.
@@ -280,11 +279,10 @@ public class UserQueryService {
     public void loadUserNames() {
         USER_NAMES.clear();
 
-        final Query query = new Query().setPageCount(1);
-        query.setFilter(new PropertyFilter(User.USER_NAME, FilterOperator.NOT_EQUAL, UserExt.NULL_USER_NAME));
-        query.addProjection(User.USER_NAME, String.class);
-        query.addProjection(UserExt.USER_AVATAR_URL, String.class);
-
+        final Query query = new Query().setPageCount(1).
+                setFilter(new PropertyFilter(UserExt.USER_STATUS, FilterOperator.EQUAL, UserExt.USER_STATUS_C_VALID)).
+                addProjection(User.USER_NAME, String.class).
+                addProjection(UserExt.USER_AVATAR_URL, String.class);
         try {
             final JSONObject result = userRepository.get(query); // XXX: Performance Issue
             final JSONArray array = result.optJSONArray(Keys.RESULTS);
@@ -294,11 +292,8 @@ public class UserQueryService {
                 final JSONObject u = new JSONObject();
                 u.put(User.USER_NAME, user.optString(User.USER_NAME));
                 u.put(UserExt.USER_T_NAME_LOWER_CASE, user.optString(User.USER_NAME).toLowerCase());
-
-                final String avatar = avatarQueryService.getAvatarURLByUser(UserExt.USER_AVATAR_VIEW_MODE_C_STATIC,
-                        user, "20");
+                final String avatar = avatarQueryService.getAvatarURLByUser(UserExt.USER_AVATAR_VIEW_MODE_C_STATIC, user, "20");
                 u.put(UserExt.USER_AVATAR_URL, avatar);
-
                 USER_NAMES.add(u);
             }
 
@@ -417,13 +412,12 @@ public class UserQueryService {
     }
 
     /**
-     * Gets the default commenter.
+     * Gets the community bot.
      *
      * @return default commenter
-     * @throws ServiceException service exception
      */
-    public JSONObject getDefaultCommenter() throws ServiceException {
-        final JSONObject ret = getUserByName(UserExt.DEFAULT_CMTER_NAME);
+    public JSONObject getComBot() {
+        final JSONObject ret = getUserByName(UserExt.COM_BOT_NAME);
         ret.remove(UserExt.USER_T_POINT_HEX);
         ret.remove(UserExt.USER_T_POINT_CC);
 
@@ -460,17 +454,13 @@ public class UserQueryService {
     public Set<String> getUserNames(final String text) {
         final Set<String> ret = new HashSet<>();
         int idx = text.indexOf('@');
-
         if (-1 == idx) {
             return ret;
         }
 
         String copy = text.trim();
         copy = copy.replaceAll("\\n", " ");
-        //(?=\\pP)匹配标点符号-http://www.cnblogs.com/qixuejia/p/4211428.html
-        copy = copy.replaceAll("(?=\\pP)[^@]", " ");
         String[] uNames = StringUtils.substringsBetween(copy, "@", " ");
-
         String tail = StringUtils.substringAfterLast(copy, "@");
         if (tail.contains(" ")) {
             tail = null;
@@ -487,7 +477,6 @@ public class UserQueryService {
         }
 
         String[] uNames2 = StringUtils.substringsBetween(copy, "@", "<");
-
         final Set<String> maybeUserNameSet;
         if (null == uNames) {
             uNames = uNames2;
@@ -581,17 +570,16 @@ public class UserQueryService {
         final Query query = new Query().addSort(Keys.OBJECT_ID, SortDirection.DESCENDING).
                 setCurrentPageNum(currentPageNum).setPageSize(pageSize);
 
-        if (requestJSONObject.has(Common.USER_NAME_OR_EMAIL)) {
-            final String nameOrEmail = requestJSONObject.optString(Common.USER_NAME_OR_EMAIL);
-
+        if (requestJSONObject.has(Common.QUERY)) {
+            final String q = requestJSONObject.optString(Common.QUERY);
             final List<Filter> filters = new ArrayList<>();
-            filters.add(new PropertyFilter(User.USER_NAME, FilterOperator.EQUAL, nameOrEmail));
-            filters.add(new PropertyFilter(User.USER_EMAIL, FilterOperator.EQUAL, nameOrEmail));
+            filters.add(new PropertyFilter(User.USER_NAME, FilterOperator.EQUAL, q));
+            filters.add(new PropertyFilter(User.USER_EMAIL, FilterOperator.EQUAL, q));
+            filters.add(new PropertyFilter(Keys.OBJECT_ID, FilterOperator.EQUAL, q));
             query.setFilter(new CompositeFilter(CompositeFilterOperator.OR, filters));
         }
 
-        JSONObject result = null;
-
+        JSONObject result;
         try {
             result = userRepository.get(query);
         } catch (final RepositoryException e) {
@@ -601,7 +589,6 @@ public class UserQueryService {
         }
 
         final int pageCount = result.optJSONObject(Pagination.PAGINATION).optInt(Pagination.PAGINATION_PAGE_COUNT);
-
         final JSONObject pagination = new JSONObject();
         ret.put(Pagination.PAGINATION, pagination);
         final List<Integer> pageNums = Paginator.paginate(currentPageNum, pageSize, pageCount, windowSize);
@@ -666,10 +653,11 @@ public class UserQueryService {
                 .setCurrentPageNum(currentPageNum).setPageSize(pageSize)
                 .setFilter(CompositeFilterOperator.and(
                         new PropertyFilter(UserExt.USER_CITY, FilterOperator.EQUAL, city),
+                        new PropertyFilter(UserExt.USER_GEO_STATUS, FilterOperator.EQUAL, UserExt.USER_GEO_STATUS_C_PUBLIC),
                         new PropertyFilter(UserExt.USER_STATUS, FilterOperator.EQUAL, UserExt.USER_STATUS_C_VALID),
                         new PropertyFilter(UserExt.USER_LATEST_LOGIN_TIME, FilterOperator.GREATER_THAN_OR_EQUAL, latestTime)
                 ));
-        JSONObject result = null;
+        JSONObject result;
         try {
             result = userRepository.get(query);
         } catch (final RepositoryException e) {
@@ -734,12 +722,7 @@ public class UserQueryService {
      */
     public String getLogoutURL(final String redirectURL) {
         String to = Latkes.getServePath();
-
-        try {
-            to = URLEncoder.encode(to + redirectURL, "UTF-8");
-        } catch (final UnsupportedEncodingException e) {
-            LOGGER.log(Level.ERROR, "URL encode[string={0}]", redirectURL);
-        }
+        to = URLs.encode(to + redirectURL);
 
         return Latkes.getContextPath() + "/logout?goto=" + to;
     }
@@ -752,12 +735,7 @@ public class UserQueryService {
      */
     public String getLoginURL(final String redirectURL) {
         String to = Latkes.getServePath();
-
-        try {
-            to = URLEncoder.encode(to + redirectURL, "UTF-8");
-        } catch (final UnsupportedEncodingException e) {
-            LOGGER.log(Level.ERROR, "URL encode[string={0}]", redirectURL);
-        }
+        to = URLs.encode(to + redirectURL);
 
         return Latkes.getContextPath() + "/login?goto=" + to;
     }

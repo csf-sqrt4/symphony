@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
@@ -21,8 +21,9 @@ import com.qiniu.util.Auth;
 import jodd.util.Base64;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.time.DateUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -35,7 +36,7 @@ import org.b3log.latke.servlet.annotation.After;
 import org.b3log.latke.servlet.annotation.Before;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
 import org.b3log.latke.util.Paginator;
 import org.b3log.latke.util.Requests;
 import org.b3log.latke.util.Stopwatchs;
@@ -53,15 +54,12 @@ import org.b3log.symphony.util.*;
 import org.json.JSONObject;
 
 import javax.imageio.ImageIO;
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.IOException;
 import java.util.*;
 import java.util.List;
 
@@ -90,7 +88,7 @@ import java.util.List;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://zephyr.b3log.org">Zephyr</a>
- * @version 1.26.28.47, Aug 18, 2017
+ * @version 1.27.2.5, Aug 10, 2018
  * @since 0.2.0
  */
 @RequestProcessor
@@ -142,18 +140,6 @@ public class ArticleProcessor {
      */
     @Inject
     private UserMgmtService userMgmtService;
-
-    /**
-     * Client management service.
-     */
-    @Inject
-    private ClientMgmtService clientMgmtService;
-
-    /**
-     * Client query service.
-     */
-    @Inject
-    private ClientQueryService clientQueryService;
 
     /**
      * Language service.
@@ -234,7 +220,7 @@ public class ArticleProcessor {
             return;
         }
 
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         final String currentUserId = currentUser.optString(Keys.OBJECT_ID);
         final JSONObject article = articleQueryService.getArticle(id);
         if (null == article) {
@@ -267,17 +253,15 @@ public class ArticleProcessor {
     /**
      * Checks article title.
      *
-     * @param context  the specified context
-     * @param request  the specified request
-     * @param response the specified response
+     * @param context the specified context
+     * @param request the specified request
      * @throws Exception exception
      */
     @RequestProcessing(value = "/article/check-title", method = HTTPRequestMethod.POST)
     @Before(adviceClass = {StopwatchStartAdvice.class, LoginCheck.class})
     @After(adviceClass = {StopwatchEndAdvice.class})
-    public void checkArticleTitle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+    public void checkArticleTitle(final HTTPRequestContext context, final HttpServletRequest request) throws Exception {
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         final String currentUserId = currentUser.optString(Keys.OBJECT_ID);
         final JSONObject requestJSONObject = Requests.parseRequestJSONObject(request, context.getResponse());
         String title = requestJSONObject.optString(Article.ARTICLE_TITLE);
@@ -351,16 +335,13 @@ public class ArticleProcessor {
      * Gets article image.
      *
      * @param context   the specified context
-     * @param request   the specified request
-     * @param response  the specified response
      * @param articleId the specified article id
      * @throws Exception exception
      */
     @RequestProcessing(value = "/article/{articleId}/image", method = HTTPRequestMethod.GET)
     @Before(adviceClass = {StopwatchStartAdvice.class, LoginCheck.class})
     @After(adviceClass = {StopwatchEndAdvice.class})
-    public void getArticleImage(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response,
-                                final String articleId) throws Exception {
+    public void getArticleImage(final HTTPRequestContext context, final String articleId) throws Exception {
         final JSONObject article = articleQueryService.getArticle(articleId);
         final String authorId = article.optString(Article.ARTICLE_AUTHOR_ID);
 
@@ -412,7 +393,7 @@ public class ArticleProcessor {
 
         final JSONObject ret = new JSONObject();
         ret.put(Keys.STATUS_CODE, true);
-        ret.put(Common.URL, (Object) url);
+        ret.put(Common.URL, url);
 
         context.renderJSON(ret);
     }
@@ -441,17 +422,15 @@ public class ArticleProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws Exception exception
      */
     @RequestProcessing(value = "/pre-post", method = HTTPRequestMethod.GET)
     @Before(adviceClass = {StopwatchStartAdvice.class, LoginCheck.class})
     @After(adviceClass = {CSRFToken.class, PermissionGrant.class, StopwatchEndAdvice.class})
-    public void showPreAddArticle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
+    public void showPreAddArticle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
 
-        renderer.setTemplateName("/home/pre-post.ftl");
+        renderer.setTemplateName("home/pre-post.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
 
         dataModel.put(Common.BROADCAST_POINT, Pointtransfer.TRANSFER_SUM_C_ADD_ARTICLE_BROADCAST);
@@ -465,7 +444,7 @@ public class ArticleProcessor {
      * @param dataModel the specified data model
      */
     private void fillDomainsWithTags(final Map<String, Object> dataModel) {
-        final List<JSONObject> domains = domainCache.getDomains(Integer.MAX_VALUE);
+        final List<JSONObject> domains = domainQueryService.getAllDomains();
         dataModel.put(Common.ADD_ARTICLE_DOMAINS, domains);
         for (final JSONObject domain : domains) {
             final List<JSONObject> tags = domainQueryService.getTags(domain.optString(Keys.OBJECT_ID));
@@ -501,17 +480,14 @@ public class ArticleProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws Exception exception
      */
     @RequestProcessing(value = "/post", method = HTTPRequestMethod.GET)
     @Before(adviceClass = {StopwatchStartAdvice.class, LoginCheck.class})
     @After(adviceClass = {CSRFToken.class, PermissionGrant.class, StopwatchEndAdvice.class})
-    public void showAddArticle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
+    public void showAddArticle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
-
-        renderer.setTemplateName("/home/post.ftl");
+        renderer.setTemplateName("home/post.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
 
         // Qiniu file upload authenticate
@@ -530,7 +506,7 @@ public class ArticleProcessor {
         dataModel.put("fileMaxSize", fileMaxSize);
 
         String tags = request.getParameter(Tag.TAGS);
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
 
         if (StringUtils.isBlank(tags)) {
             tags = "";
@@ -544,7 +520,7 @@ public class ArticleProcessor {
             for (final String title : tagTitles) {
                 final String tagTitle = title.trim();
 
-                if (Strings.isEmptyOrNull(tagTitle)) {
+                if (StringUtils.isBlank(tagTitle)) {
                     continue;
                 }
 
@@ -614,9 +590,6 @@ public class ArticleProcessor {
                 String.valueOf(ArticleAddValidation.MAX_ARTICLE_CONTENT_LENGTH));
         dataModel.put("articleContentErrorLabel", articleContentErrorLabel);
 
-        final String b3logKey = currentUser.optString(UserExt.USER_B3_KEY);
-        dataModel.put("hasB3Key", !Strings.isEmptyOrNull(b3logKey));
-
         fillPostArticleRequisite(dataModel, currentUser);
         fillDomainsWithTags(dataModel);
     }
@@ -625,10 +598,10 @@ public class ArticleProcessor {
         boolean requisite = false;
         String requisiteMsg = "";
 
-        if (!UserExt.updatedAvatar(currentUser)) {
-            requisite = true;
-            requisiteMsg = langPropsService.get("uploadAvatarThenPostLabel");
-        }
+//        if (!UserExt.updatedAvatar(currentUser)) {
+//            requisite = true;
+//            requisiteMsg = langPropsService.get("uploadAvatarThenPostLabel");
+//        }
 
         dataModel.put(Common.REQUISITE, requisite);
         dataModel.put(Common.REQUISITE_MSG, requisiteMsg);
@@ -650,8 +623,7 @@ public class ArticleProcessor {
                             final String articleId) throws Exception {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
-
-        renderer.setTemplateName("/article.ftl");
+        renderer.setTemplateName("article.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
 
         final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
@@ -663,15 +635,11 @@ public class ArticleProcessor {
             return;
         }
 
-        final HttpSession session = request.getSession(false);
-        if (null != session) {
-            session.setAttribute(Article.ARTICLE_T_ID, articleId);
-        }
-
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
 
         final String authorId = article.optString(Article.ARTICLE_AUTHOR_ID);
         final JSONObject author = userQueryService.getUser(authorId);
+        Escapes.escapeHTML(author);
 
         if (Article.ARTICLE_ANONYMOUS_C_PUBLIC == article.optInt(Article.ARTICLE_ANONYMOUS)) {
             article.put(Article.ARTICLE_T_AUTHOR_NAME, author.optString(User.USER_NAME));
@@ -716,28 +684,47 @@ public class ArticleProcessor {
                 article.put(Common.REWARDED, rewardQueryService.isRewarded(currentUserId, articleId, Reward.TYPE_C_ARTICLE));
             }
 
-            if (Strings.isEmptyOrNull(cmtViewModeStr) || !Strings.isNumeric(cmtViewModeStr)) {
+            if (StringUtils.isBlank(cmtViewModeStr) || !Strings.isNumeric(cmtViewModeStr)) {
                 cmtViewModeStr = currentUser.optString(UserExt.USER_COMMENT_VIEW_MODE);
             }
-        } else if (Strings.isEmptyOrNull(cmtViewModeStr) || !Strings.isNumeric(cmtViewModeStr)) {
+        } else if (StringUtils.isBlank(cmtViewModeStr) || !Strings.isNumeric(cmtViewModeStr)) {
             cmtViewModeStr = "0";
         }
 
         final int cmtViewMode = Integer.valueOf(cmtViewModeStr);
         dataModel.put(UserExt.USER_COMMENT_VIEW_MODE, cmtViewMode);
 
-        if (!(Boolean) request.getAttribute(Keys.HttpRequest.IS_SEARCH_ENGINE_BOT)) {
-            articleMgmtService.incArticleViewCount(articleId);
-        }
-
-        final JSONObject viewer = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject viewer = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null != viewer) {
             livenessMgmtService.incLiveness(viewer.optString(Keys.OBJECT_ID), Liveness.LIVENESS_PV);
         }
 
+        if (!(Boolean) request.getAttribute(Keys.HttpRequest.IS_SEARCH_ENGINE_BOT)) {
+            final long created = System.currentTimeMillis();
+            final long expired = DateUtils.addMonths(new Date(created), 1).getTime();
+            final String ip = Requests.getRemoteAddr(request);
+            final String ua = Headers.getHeader(request, Common.USER_AGENT, "");
+            final String referer = Headers.getHeader(request, "Referer", "");
+            final JSONObject visit = new JSONObject();
+            visit.put(Visit.VISIT_IP, ip);
+            visit.put(Visit.VISIT_CITY, "");
+            visit.put(Visit.VISIT_CREATED, created);
+            visit.put(Visit.VISIT_DEVICE_ID, "");
+            visit.put(Visit.VISIT_EXPIRED, expired);
+            visit.put(Visit.VISIT_REFERER_URL, referer);
+            visit.put(Visit.VISIT_UA, ua);
+            visit.put(Visit.VISIT_URL, "/article/" + articleId);
+            visit.put(Visit.VISIT_USER_ID, "");
+            if (null != viewer) {
+                visit.put(Visit.VISIT_USER_ID, viewer.optString(Keys.OBJECT_ID));
+            }
+
+            articleMgmtService.incArticleViewCount(visit);
+        }
+
         dataModelService.fillRelevantArticles(avatarViewMode, dataModel, article);
-        dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-        dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
 
         // Qiniu file upload authenticate
         final Auth auth = Auth.create(Symphonys.get("qiniu.accessKey"), Symphonys.get("qiniu.secretKey"));
@@ -759,6 +746,17 @@ public class ArticleProcessor {
         try {
             article.put(Common.THANKED, rewardQueryService.isRewarded(currentUserId, articleId, Reward.TYPE_C_THANK_ARTICLE));
             article.put(Common.THANKED_COUNT, rewardQueryService.rewardedCount(articleId, Reward.TYPE_C_THANK_ARTICLE));
+            final String articleAuthorId = article.optString(Article.ARTICLE_AUTHOR_ID);
+            if (Article.ARTICLE_TYPE_C_QNA == article.optInt(Article.ARTICLE_TYPE)) {
+                article.put(Common.OFFERED, rewardQueryService.isRewarded(articleAuthorId, articleId, Reward.TYPE_C_ACCEPT_COMMENT));
+                final JSONObject offeredComment = commentQueryService.getOfferedComment(avatarViewMode, cmtViewMode, articleId);
+                article.put(Article.ARTICLE_T_OFFERED_COMMENT, offeredComment);
+                if (null != offeredComment) {
+                    final String offeredCmtId = offeredComment.optString(Keys.OBJECT_ID);
+                    offeredComment.put(Common.REWARED_COUNT, rewardQueryService.rewardedCount(offeredCmtId, Reward.TYPE_C_COMMENT));
+                    offeredComment.put(Common.REWARDED, rewardQueryService.isRewarded(currentUserId, offeredCmtId, Reward.TYPE_C_COMMENT));
+                }
+            }
         } finally {
             Stopwatchs.end();
         }
@@ -773,13 +771,7 @@ public class ArticleProcessor {
         stickConfirmLabel = stickConfirmLabel.replace("{point}", Symphonys.get("pointStickArticle"));
         dataModel.put("stickConfirmLabel", stickConfirmLabel);
         dataModel.put("pointThankArticle", Symphonys.get("pointThankArticle"));
-
-        String pageNumStr = request.getParameter("p");
-        if (Strings.isEmptyOrNull(pageNumStr) || !Strings.isNumeric(pageNumStr)) {
-            pageNumStr = "1";
-        }
-
-        final int pageNum = Integer.valueOf(pageNumStr);
+        final int pageNum = Paginator.getPage(request);
         final int pageSize = Symphonys.getInt("articleCommentsPageSize");
         final int windowSize = Symphonys.getInt("articleCommentsWindowSize");
 
@@ -805,8 +797,7 @@ public class ArticleProcessor {
             return;
         }
 
-        final List<JSONObject> niceComments
-                = commentQueryService.getNiceComments(avatarViewMode, cmtViewMode, articleId, 3);
+        final List<JSONObject> niceComments = commentQueryService.getNiceComments(avatarViewMode, cmtViewMode, articleId, 3);
         article.put(Article.ARTICLE_T_NICE_COMMENTS, (Object) niceComments);
 
         double niceCmtScore = Double.MAX_VALUE;
@@ -821,13 +812,20 @@ public class ArticleProcessor {
 
                 final String commentId = comment.optString(Keys.OBJECT_ID);
                 if (isLoggedIn) {
-                    comment.put(Common.REWARDED,
-                            rewardQueryService.isRewarded(currentUserId, commentId, Reward.TYPE_C_COMMENT));
+                    comment.put(Common.REWARDED, rewardQueryService.isRewarded(currentUserId, commentId, Reward.TYPE_C_COMMENT));
                     final int commentVote = voteQueryService.isVoted(currentUserId, commentId);
                     comment.put(Comment.COMMENT_T_VOTE, commentVote);
                 }
 
                 comment.put(Common.REWARED_COUNT, rewardQueryService.rewardedCount(commentId, Reward.TYPE_C_COMMENT));
+
+                // https://github.com/b3log/symphony/issues/682
+                if (Comment.COMMENT_VISIBLE_C_AUTHOR == comment.optInt(Comment.COMMENT_VISIBLE)) {
+                    final String commentAuthorId = comment.optString(Comment.COMMENT_AUTHOR_ID);
+                    if (!isLoggedIn || (!StringUtils.equals(currentUserId, commentAuthorId) && !StringUtils.equals(currentUserId, authorId))) {
+                        comment.put(Comment.COMMENT_CONTENT, langPropsService.get("onlySelfAndArticleAuthorVisibleLabel"));
+                    }
+                }
             }
         }
 
@@ -856,6 +854,14 @@ public class ArticleProcessor {
                 }
 
                 comment.put(Common.REWARED_COUNT, rewardQueryService.rewardedCount(commentId, Reward.TYPE_C_COMMENT));
+
+                // https://github.com/b3log/symphony/issues/682
+                if (Comment.COMMENT_VISIBLE_C_AUTHOR == comment.optInt(Comment.COMMENT_VISIBLE)) {
+                    final String commentAuthorId = comment.optString(Comment.COMMENT_AUTHOR_ID);
+                    if (!isLoggedIn || (!StringUtils.equals(currentUserId, commentAuthorId) && !StringUtils.equals(currentUserId, authorId))) {
+                        comment.put(Comment.COMMENT_CONTENT, langPropsService.get("onlySelfAndArticleAuthorVisibleLabel"));
+                    }
+                }
             }
         } finally {
             Stopwatchs.end();
@@ -886,6 +892,10 @@ public class ArticleProcessor {
 
             articleMgmtService.genArticleAudio(article, uid);
         }
+
+        if (StringUtils.isNotBlank(Symphonys.get("ipfs.dir"))) {
+            articleMgmtService.saveMarkdown(article);
+        }
     }
 
     /**
@@ -901,41 +911,34 @@ public class ArticleProcessor {
      *   "articleType": int,
      *   "articleRewardContent": "",
      *   "articleRewardPoint": int,
+     *   "articleQnAOfferPoint": int,
      *   "articleAnonymous": boolean
      * }
      * </pre>
      * </p>
      *
-     * @param context  the specified context
-     * @param request  the specified request
-     * @param response the specified response
-     * @throws IOException      io exception
-     * @throws ServletException servlet exception
+     * @param context the specified context
+     * @param request the specified request
      */
     @RequestProcessing(value = "/article", method = HTTPRequestMethod.POST)
-    @Before(adviceClass = {StopwatchStartAdvice.class, LoginCheck.class, CSRFCheck.class, ArticleAddValidation.class,
-            PermissionCheck.class})
+    @Before(adviceClass = {StopwatchStartAdvice.class, LoginCheck.class, CSRFCheck.class, ArticleAddValidation.class, PermissionCheck.class})
     @After(adviceClass = StopwatchEndAdvice.class)
-    public void addArticle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws IOException, ServletException {
+    public void addArticle(final HTTPRequestContext context, final HttpServletRequest request, final JSONObject requestJSONObject) {
         context.renderJSON();
-
-        final JSONObject requestJSONObject = (JSONObject) request.getAttribute(Keys.REQUEST);
 
         final String articleTitle = requestJSONObject.optString(Article.ARTICLE_TITLE);
         String articleTags = requestJSONObject.optString(Article.ARTICLE_TAGS);
         final String articleContent = requestJSONObject.optString(Article.ARTICLE_CONTENT);
-        //final boolean articleCommentable = requestJSONObject.optBoolean(Article.ARTICLE_COMMENTABLE);
-        final boolean articleCommentable = true;
+        final boolean articleCommentable = requestJSONObject.optBoolean(Article.ARTICLE_COMMENTABLE, true);
         final int articleType = requestJSONObject.optInt(Article.ARTICLE_TYPE, Article.ARTICLE_TYPE_C_NORMAL);
         final String articleRewardContent = requestJSONObject.optString(Article.ARTICLE_REWARD_CONTENT);
         final int articleRewardPoint = requestJSONObject.optInt(Article.ARTICLE_REWARD_POINT);
+        final int articleQnAOfferPoint = requestJSONObject.optInt(Article.ARTICLE_QNA_OFFER_POINT);
         final String ip = Requests.getRemoteAddr(request);
-        final String ua = request.getHeader(Common.USER_AGENT);
+        final String ua = Headers.getHeader(request, Common.USER_AGENT, "");
         final boolean isAnonymous = requestJSONObject.optBoolean(Article.ARTICLE_ANONYMOUS, false);
         final int articleAnonymous = isAnonymous
                 ? Article.ARTICLE_ANONYMOUS_C_ANONYMOUS : Article.ARTICLE_ANONYMOUS_C_PUBLIC;
-        final boolean syncWithSymphonyClient = requestJSONObject.optBoolean(Article.ARTICLE_SYNC_TO_CLIENT, false);
 
         final JSONObject article = new JSONObject();
         article.put(Article.ARTICLE_TITLE, articleTitle);
@@ -945,19 +948,16 @@ public class ArticleProcessor {
         article.put(Article.ARTICLE_TYPE, articleType);
         article.put(Article.ARTICLE_REWARD_CONTENT, articleRewardContent);
         article.put(Article.ARTICLE_REWARD_POINT, articleRewardPoint);
+        article.put(Article.ARTICLE_QNA_OFFER_POINT, articleQnAOfferPoint);
         article.put(Article.ARTICLE_IP, "");
         if (StringUtils.isNotBlank(ip)) {
             article.put(Article.ARTICLE_IP, ip);
         }
-        article.put(Article.ARTICLE_UA, "");
-        if (StringUtils.isNotBlank(ua)) {
-            article.put(Article.ARTICLE_UA, ua);
-        }
+        article.put(Article.ARTICLE_UA, ua);
         article.put(Article.ARTICLE_ANONYMOUS, articleAnonymous);
-        article.put(Article.ARTICLE_SYNC_TO_CLIENT, syncWithSymphonyClient);
 
         try {
-            final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+            final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
 
             article.put(Article.ARTICLE_AUTHOR_ID, currentUser.optString(Keys.OBJECT_ID));
 
@@ -974,7 +974,6 @@ public class ArticleProcessor {
             }
 
             article.put(Article.ARTICLE_TAGS, articleTags);
-            article.put(Article.ARTICLE_T_IS_BROADCAST, false);
 
             final String articleId = articleMgmtService.addArticle(article);
 
@@ -1003,7 +1002,7 @@ public class ArticleProcessor {
     public void showUpdateArticle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
             throws Exception {
         final String articleId = request.getParameter("id");
-        if (Strings.isEmptyOrNull(articleId)) {
+        if (StringUtils.isBlank(articleId)) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
 
             return;
@@ -1016,7 +1015,7 @@ public class ArticleProcessor {
             return;
         }
 
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null == currentUser
                 || !currentUser.optString(Keys.OBJECT_ID).equals(article.optString(Article.ARTICLE_AUTHOR_ID))) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -1026,11 +1025,11 @@ public class ArticleProcessor {
 
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
-
-        renderer.setTemplateName("/home/post.ftl");
+        renderer.setTemplateName("home/post.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
 
         dataModel.put(Article.ARTICLE, article);
+        dataModel.put(Article.ARTICLE_TYPE, article.optInt(Article.ARTICLE_TYPE));
 
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
 
@@ -1057,9 +1056,6 @@ public class ArticleProcessor {
         dataModel.put("rewardEditorPlaceholderLabel", rewardEditorPlaceholderLabel);
         dataModel.put(Common.BROADCAST_POINT, Pointtransfer.TRANSFER_SUM_C_ADD_ARTICLE_BROADCAST);
 
-        final String b3logKey = currentUser.optString(UserExt.USER_B3_KEY);
-        dataModel.put("hasB3Key", !Strings.isEmptyOrNull(b3logKey));
-
         fillPostArticleRequisite(dataModel, currentUser);
     }
 
@@ -1075,7 +1071,8 @@ public class ArticleProcessor {
      *   "articleCommentable": boolean,
      *   "articleType": int,
      *   "articleRewardContent": "",
-     *   "articleRewardPoint": int
+     *   "articleRewardPoint": int,
+     *    "articleQnAOfferPoint": int
      * }
      * </pre>
      * </p>
@@ -1092,7 +1089,7 @@ public class ArticleProcessor {
     @After(adviceClass = StopwatchEndAdvice.class)
     public void updateArticle(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response,
                               final String id) throws Exception {
-        if (Strings.isEmptyOrNull(id)) {
+        if (StringUtils.isBlank(id)) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
 
             return;
@@ -1109,18 +1106,25 @@ public class ArticleProcessor {
 
         context.renderJSON();
 
+        if (Article.ARTICLE_STATUS_C_VALID != oldArticle.optInt(Article.ARTICLE_STATUS)) {
+            context.renderMsg(langPropsService.get("articleLockedLabel"));
+            context.renderJSONValue(Keys.STATUS_CODE, StatusCodes.ERR);
+
+            return;
+        }
+
         final JSONObject requestJSONObject = (JSONObject) request.getAttribute(Keys.REQUEST);
 
         final String articleTitle = requestJSONObject.optString(Article.ARTICLE_TITLE);
         String articleTags = requestJSONObject.optString(Article.ARTICLE_TAGS);
         final String articleContent = requestJSONObject.optString(Article.ARTICLE_CONTENT);
-        //final boolean articleCommentable = requestJSONObject.optBoolean(Article.ARTICLE_COMMENTABLE);
-        final boolean articleCommentable = true;
+        final boolean articleCommentable = requestJSONObject.optBoolean(Article.ARTICLE_COMMENTABLE, true);
         final int articleType = requestJSONObject.optInt(Article.ARTICLE_TYPE, Article.ARTICLE_TYPE_C_NORMAL);
         final String articleRewardContent = requestJSONObject.optString(Article.ARTICLE_REWARD_CONTENT);
         final int articleRewardPoint = requestJSONObject.optInt(Article.ARTICLE_REWARD_POINT);
+        final int articleQnAOfferPoint = requestJSONObject.optInt(Article.ARTICLE_QNA_OFFER_POINT);
         final String ip = Requests.getRemoteAddr(request);
-        final String ua = request.getHeader(Common.USER_AGENT);
+        final String ua = Headers.getHeader(request, Common.USER_AGENT, "");
 
         final JSONObject article = new JSONObject();
         article.put(Keys.OBJECT_ID, id);
@@ -1131,16 +1135,14 @@ public class ArticleProcessor {
         article.put(Article.ARTICLE_TYPE, articleType);
         article.put(Article.ARTICLE_REWARD_CONTENT, articleRewardContent);
         article.put(Article.ARTICLE_REWARD_POINT, articleRewardPoint);
+        article.put(Article.ARTICLE_QNA_OFFER_POINT, articleQnAOfferPoint);
         article.put(Article.ARTICLE_IP, "");
         if (StringUtils.isNotBlank(ip)) {
             article.put(Article.ARTICLE_IP, ip);
         }
-        article.put(Article.ARTICLE_UA, "");
-        if (StringUtils.isNotBlank(ua)) {
-            article.put(Article.ARTICLE_UA, ua);
-        }
+        article.put(Article.ARTICLE_UA, ua);
 
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null == currentUser
                 || !currentUser.optString(Keys.OBJECT_ID).equals(oldArticle.optString(Article.ARTICLE_AUTHOR_ID))) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -1189,19 +1191,16 @@ public class ArticleProcessor {
      * </pre>
      * </p>
      *
-     * @param request  the specified http servlet request
-     * @param response the specified http servlet response
-     * @param context  the specified http request context
-     * @throws Exception exception
+     * @param request the specified http servlet request
+     * @param context the specified http request context
      */
     @RequestProcessing(value = "/markdown", method = HTTPRequestMethod.POST)
-    @Before(adviceClass = {StopwatchStartAdvice.class, LoginCheck.class})
+    @Before(adviceClass = StopwatchStartAdvice.class)
     @After(adviceClass = StopwatchEndAdvice.class)
-    public void markdown2HTML(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
-            throws Exception {
+    public void markdown2HTML(final HttpServletRequest request, final HTTPRequestContext context) {
         context.renderJSON(true);
         String markdownText = request.getParameter("markdownText");
-        if (Strings.isEmptyOrNull(markdownText)) {
+        if (StringUtils.isBlank(markdownText)) {
             context.renderJSONValue("html", "");
 
             return;
@@ -1264,7 +1263,7 @@ public class ArticleProcessor {
     @After(adviceClass = StopwatchEndAdvice.class)
     public void reward(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
             throws Exception {
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null == currentUser) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
 
@@ -1272,7 +1271,7 @@ public class ArticleProcessor {
         }
 
         final String articleId = request.getParameter(Article.ARTICLE_T_ID);
-        if (Strings.isEmptyOrNull(articleId)) {
+        if (StringUtils.isBlank(articleId)) {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 
             return;
@@ -1291,16 +1290,8 @@ public class ArticleProcessor {
         final JSONObject article = articleQueryService.getArticle(articleId);
         articleQueryService.processArticleContent(article, request);
 
-        String markdownText = article.optString(Article.ARTICLE_REWARD_CONTENT);
-        markdownText = shortLinkQueryService.linkArticle(markdownText);
-        markdownText = shortLinkQueryService.linkTag(markdownText);
-        markdownText = Emotions.toAliases(markdownText);
-        markdownText = Emotions.convert(markdownText);
-        markdownText = Markdowns.toHTML(markdownText);
-        markdownText = Markdowns.clean(markdownText, "");
-
-        context.renderTrueResult().
-                renderJSONValue(Article.ARTICLE_REWARD_CONTENT, markdownText);
+        final String rewardContent = article.optString(Article.ARTICLE_REWARD_CONTENT);
+        context.renderTrueResult().renderJSONValue(Article.ARTICLE_REWARD_CONTENT, rewardContent);
     }
 
     /**
@@ -1316,7 +1307,7 @@ public class ArticleProcessor {
     @After(adviceClass = StopwatchEndAdvice.class)
     public void thank(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
             throws Exception {
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null == currentUser) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
 
@@ -1324,7 +1315,7 @@ public class ArticleProcessor {
         }
 
         final String articleId = request.getParameter(Article.ARTICLE_T_ID);
-        if (Strings.isEmptyOrNull(articleId)) {
+        if (StringUtils.isBlank(articleId)) {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 
             return;
@@ -1356,7 +1347,7 @@ public class ArticleProcessor {
     @After(adviceClass = StopwatchEndAdvice.class)
     public void stickArticle(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
             throws Exception {
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null == currentUser) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
 
@@ -1364,7 +1355,7 @@ public class ArticleProcessor {
         }
 
         final String articleId = request.getParameter(Article.ARTICLE_T_ID);
-        if (Strings.isEmptyOrNull(articleId)) {
+        if (StringUtils.isBlank(articleId)) {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST);
 
             return;

@@ -1,25 +1,25 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -47,7 +47,7 @@ import java.util.Map;
  * Domain query service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.2, Mar 30, 2017
+ * @version 1.1.0.0, Apr 1, 2018
  * @since 1.4.0
  */
 @Service
@@ -83,13 +83,42 @@ public class DomainQueryService {
     private ShortLinkQueryService shortLinkQueryService;
 
     /**
-     * Gets most tag domain.
+     * Gets all domains.
+     *
+     * @return domains, returns an empty list if not found
+     */
+    public List<JSONObject> getAllDomains() {
+        final Query query = new Query().
+                addSort(Domain.DOMAIN_SORT, SortDirection.ASCENDING).
+                addSort(Domain.DOMAIN_TAG_COUNT, SortDirection.DESCENDING).
+                addSort(Keys.OBJECT_ID, SortDirection.DESCENDING).
+                setPageSize(Integer.MAX_VALUE).setPageCount(1);
+        try {
+            final List<JSONObject> ret = CollectionUtils.jsonArrayToList(domainRepository.get(query).optJSONArray(Keys.RESULTS));
+            for (final JSONObject domain : ret) {
+                final List<JSONObject> tags = getTags(domain.optString(Keys.OBJECT_ID));
+
+                domain.put(Domain.DOMAIN_T_TAGS, (Object) tags);
+            }
+
+            return ret;
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Gets all domains failed", e);
+
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Gets most tag navigation domains.
      *
      * @param fetchSize the specified fetch size
      * @return domains, returns an empty list if not found
      */
-    public List<JSONObject> getMostTagDomain(final int fetchSize) {
-        final Query query = new Query().addSort(Domain.DOMAIN_SORT, SortDirection.ASCENDING).
+    public List<JSONObject> getMostTagNaviDomains(final int fetchSize) {
+        final Query query = new Query().
+                setFilter(new PropertyFilter(Domain.DOMAIN_NAV, FilterOperator.EQUAL, Domain.DOMAIN_NAV_C_ENABLED)).
+                addSort(Domain.DOMAIN_SORT, SortDirection.ASCENDING).
                 addSort(Domain.DOMAIN_TAG_COUNT, SortDirection.DESCENDING).
                 addSort(Keys.OBJECT_ID, SortDirection.DESCENDING).
                 setPageSize(fetchSize).setPageCount(1);
@@ -103,7 +132,7 @@ public class DomainQueryService {
 
             return ret;
         } catch (final Exception e) {
-            LOGGER.log(Level.ERROR, "Gets most tag domain error", e);
+            LOGGER.log(Level.ERROR, "Gets most tag navigation domains failed", e);
 
             return Collections.emptyList();
         }
@@ -116,7 +145,7 @@ public class DomainQueryService {
      * @return tags, returns an empty list if not found
      */
     public List<JSONObject> getTags(final String domainId) {
-        final List<JSONObject> ret = new ArrayList<JSONObject>();
+        final List<JSONObject> ret = new ArrayList<>();
 
         final Query query = new Query().
                 setFilter(new PropertyFilter(Domain.DOMAIN + "_" + Keys.OBJECT_ID, FilterOperator.EQUAL, domainId));
@@ -238,14 +267,13 @@ public class DomainQueryService {
     /**
      * Gets domains by the specified request json object.
      *
-     * @param requestJSONObject the specified request json object, for example,      <pre>
+     * @param requestJSONObject the specified request json object, for example,
      *                          {
-     *                              "domainTitle": "", // optional
-     *                              "paginationCurrentPageNum": 1,
-     *                              "paginationPageSize": 20,
-     *                              "paginationWindowSize": 10
+     *                          "domainTitle": "", // optional
+     *                          "paginationCurrentPageNum": 1,
+     *                          "paginationPageSize": 20,
+     *                          "paginationWindowSize": 10
      *                          }, see {@link Pagination} for more details
-     *                          </pre>
      * @param domainFields      the specified domain fields to return
      * @return for example,      <pre>
      * {
@@ -282,8 +310,7 @@ public class DomainQueryService {
             query.setFilter(new PropertyFilter(Domain.DOMAIN_TITLE, FilterOperator.EQUAL, requestJSONObject.optString(Domain.DOMAIN_TITLE)));
         }
 
-        JSONObject result = null;
-
+        JSONObject result;
         try {
             result = domainRepository.get(query);
         } catch (final RepositoryException e) {
@@ -301,7 +328,7 @@ public class DomainQueryService {
         pagination.put(Pagination.PAGINATION_PAGE_NUMS, pageNums);
 
         final JSONArray data = result.optJSONArray(Keys.RESULTS);
-        final List<JSONObject> domains = CollectionUtils.<JSONObject>jsonArrayToList(data);
+        final List<JSONObject> domains = CollectionUtils.jsonArrayToList(data);
 
         ret.put(Domain.DOMAINS, domains);
 

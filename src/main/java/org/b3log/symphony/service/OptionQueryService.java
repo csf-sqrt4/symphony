@@ -1,25 +1,25 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.*;
@@ -28,7 +28,10 @@ import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.latke.util.CollectionUtils;
 import org.b3log.symphony.model.Option;
-import org.b3log.symphony.processor.channel.*;
+import org.b3log.symphony.processor.channel.ArticleChannel;
+import org.b3log.symphony.processor.channel.ArticleListChannel;
+import org.b3log.symphony.processor.channel.ChatRoomChannel;
+import org.b3log.symphony.processor.channel.UserChannel;
 import org.b3log.symphony.repository.OptionRepository;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -41,7 +44,7 @@ import java.util.Set;
  * Option query service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.4.0.11, Aug 21, 2017
+ * @version 1.4.0.12, Jan 30, 2018
  * @since 0.2.0
  */
 @Service
@@ -84,8 +87,7 @@ public class OptionQueryService {
      * @return online visitor count
      */
     public int getOnlineVisitorCount() {
-        final int ret = ArticleChannel.SESSIONS.size() + ArticleListChannel.SESSIONS.size() + TimelineChannel.SESSIONS.size()
-                + ChatRoomChannel.SESSIONS.size() + getOnlineMemberCount();
+        final int ret = ArticleChannel.SESSIONS.size() + ArticleListChannel.SESSIONS.size() + ChatRoomChannel.SESSIONS.size() + getOnlineMemberCount();
 
         try {
             final JSONObject maxOnlineMemberCntRecord = optionRepository.get(Option.ID_C_STATISTIC_MAX_ONLINE_VISITOR_COUNT);
@@ -197,7 +199,7 @@ public class OptionQueryService {
      * @param word the specified word
      * @return {@code true} if it is a reserved word, returns {@code false} otherwise
      */
-    public boolean existReservedWord(final String word) {
+    public boolean isReservedWord(final String word) {
         final Query query = new Query().
                 setFilter(CompositeFilterOperator.and(
                         new PropertyFilter(Option.OPTION_VALUE, FilterOperator.EQUAL, word),

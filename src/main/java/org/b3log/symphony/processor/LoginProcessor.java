@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
@@ -23,7 +23,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.time.DateUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
@@ -35,10 +35,9 @@ import org.b3log.latke.servlet.annotation.After;
 import org.b3log.latke.servlet.annotation.Before;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
 import org.b3log.latke.util.Locales;
 import org.b3log.latke.util.Requests;
-import org.b3log.latke.util.Strings;
 import org.b3log.symphony.model.*;
 import org.b3log.symphony.processor.advice.CSRFToken;
 import org.b3log.symphony.processor.advice.LoginCheck;
@@ -53,7 +52,6 @@ import org.b3log.symphony.util.Sessions;
 import org.b3log.symphony.util.Symphonys;
 import org.json.JSONObject;
 
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -70,8 +68,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @author <a href="http://vanessa.b3log.org">LiYuan Li</a>
- * @version 1.13.9.20, Jan 12, 2017
+ * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
+ * @version 1.13.12.5, Aug 7, 2018
  * @since 0.2.0
  */
 @RequestProcessor
@@ -133,12 +131,6 @@ public class LoginProcessor {
     private VerifycodeQueryService verifycodeQueryService;
 
     /**
-     * Timeline management service.
-     */
-    @Inject
-    private TimelineMgmtService timelineMgmtService;
-
-    /**
      * Option query service.
      */
     @Inject
@@ -195,7 +187,7 @@ public class LoginProcessor {
             return;
         }
 
-        JSONObject user = (JSONObject) request.getAttribute(User.USER);
+        JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         final String userId = user.optString(Keys.OBJECT_ID);
 
         int step = requestJSONObject.optInt(UserExt.USER_GUIDE_STEP);
@@ -218,7 +210,7 @@ public class LoginProcessor {
     }
 
     /**
-     * Shows login page.
+     * Shows guide page.
      *
      * @param context  the specified context
      * @param request  the specified request
@@ -230,7 +222,7 @@ public class LoginProcessor {
     @After(adviceClass = {CSRFToken.class, PermissionGrant.class, StopwatchEndAdvice.class})
     public void showGuide(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
             throws Exception {
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         final int step = currentUser.optInt(UserExt.USER_GUIDE_STEP);
         if (UserExt.USER_GUIDE_STEP_FIN == step) {
             response.sendRedirect(Latkes.getServePath());
@@ -240,7 +232,7 @@ public class LoginProcessor {
 
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
-        renderer.setTemplateName("/verify/guide.ftl");
+        renderer.setTemplateName("verify/guide.ftl");
 
         final Map<String, Object> dataModel = renderer.getDataModel();
         dataModel.put(Common.CURRENT_USER, currentUser);
@@ -291,8 +283,7 @@ public class LoginProcessor {
     @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
     public void showLogin(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
             throws Exception {
-        if (null != userQueryService.getCurrentUser(request)
-                || userMgmtService.tryLogInWithCookie(request, response)) {
+        if (null != request.getAttribute(Common.CURRENT_USER)) {
             response.sendRedirect(Latkes.getServePath());
 
             return;
@@ -306,11 +297,11 @@ public class LoginProcessor {
             referer = request.getHeader("referer");
         }
 
-        if (StringUtils.isBlank(referer)) {
+        if (!StringUtils.startsWith(referer, Latkes.getServePath())) {
             referer = Latkes.getServePath();
         }
 
-        renderer.setTemplateName("/verify/login.ftl");
+        renderer.setTemplateName("verify/login.ftl");
 
         final Map<String, Object> dataModel = renderer.getDataModel();
         dataModel.put(Common.GOTO, referer);
@@ -324,13 +315,11 @@ public class LoginProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws Exception exception
      */
     @RequestProcessing(value = "/forget-pwd", method = HTTPRequestMethod.GET)
     @Before(adviceClass = StopwatchStartAdvice.class)
     @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
-    public void showForgetPwd(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
+    public void showForgetPwd(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
         final Map<String, Object> dataModel = renderer.getDataModel();
@@ -343,15 +332,12 @@ public class LoginProcessor {
     /**
      * Forget password.
      *
-     * @param context  the specified context
-     * @param request  the specified request
-     * @param response the specified response
-     * @throws Exception exception
+     * @param context the specified context
+     * @param request the specified request
      */
     @RequestProcessing(value = "/forget-pwd", method = HTTPRequestMethod.POST)
     @Before(adviceClass = UserForgetPwdValidation.class)
-    public void forgetPwd(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
+    public void forgetPwd(final HTTPRequestContext context, final HttpServletRequest request) {
         context.renderJSON();
 
         final JSONObject requestJSONObject = (JSONObject) request.getAttribute(Keys.REQUEST);
@@ -359,7 +345,7 @@ public class LoginProcessor {
 
         try {
             final JSONObject user = userQueryService.getUserByEmail(email);
-            if (null == user) {
+            if (null == user || UserExt.USER_STATUS_C_VALID != user.optInt(UserExt.USER_STATUS)) {
                 context.renderFalseResult().renderMsg(langPropsService.get("notFoundUserLabel"));
 
                 return;
@@ -381,7 +367,7 @@ public class LoginProcessor {
             context.renderTrueResult().renderMsg(langPropsService.get("verifycodeSentLabel"));
         } catch (final ServiceException e) {
             final String msg = langPropsService.get("resetPwdLabel") + " - " + e.getMessage();
-            LOGGER.log(Level.ERROR, msg + "[name={0}, email={1}]", email);
+            LOGGER.log(Level.ERROR, msg + "[email=" + email + "]");
 
             context.renderMsg(msg);
         }
@@ -408,13 +394,14 @@ public class LoginProcessor {
         final JSONObject verifycode = verifycodeQueryService.getVerifycode(code);
         if (null == verifycode) {
             dataModel.put(Keys.MSG, langPropsService.get("verifycodeExpiredLabel"));
-            renderer.setTemplateName("/error/custom.ftl");
+            renderer.setTemplateName("error/custom.ftl");
         } else {
             renderer.setTemplateName("verify/reset-pwd.ftl");
 
             final String userId = verifycode.optString(Verifycode.USER_ID);
             final JSONObject user = userQueryService.getUser(userId);
             dataModel.put(User.USER, user);
+            dataModel.put(Common.CODE, code);
         }
 
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
@@ -426,23 +413,27 @@ public class LoginProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws ServletException servlet exception
-     * @throws IOException      io exception
      */
     @RequestProcessing(value = "/reset-pwd", method = HTTPRequestMethod.POST)
-    public void resetPwd(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+    public void resetPwd(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         context.renderJSON();
 
         final JSONObject requestJSONObject = Requests.parseRequestJSONObject(request, response);
         final String password = requestJSONObject.optString(User.USER_PASSWORD); // Hashed
-        final String userId = requestJSONObject.optString(Common.USER_ID);
+        final String userId = requestJSONObject.optString(UserExt.USER_T_ID);
+        final String code = requestJSONObject.optString(Common.CODE);
+        final JSONObject verifycode = verifycodeQueryService.getVerifycode(code);
+        if (null == verifycode || !verifycode.optString(Verifycode.USER_ID).equals(userId)) {
+            context.renderMsg(langPropsService.get("verifycodeExpiredLabel"));
+
+            return;
+        }
 
         String name = null;
         String email = null;
         try {
             final JSONObject user = userQueryService.getUser(userId);
-            if (null == user) {
+            if (null == user || UserExt.USER_STATUS_C_VALID != user.optInt(UserExt.USER_STATUS)) {
                 context.renderMsg(langPropsService.get("resetPwdLabel") + " - " + "User Not Found");
 
                 return;
@@ -450,9 +441,11 @@ public class LoginProcessor {
 
             user.put(User.USER_PASSWORD, password);
             userMgmtService.updatePassword(user);
+            verifycodeMgmtService.removeByCode(code);
             context.renderTrueResult();
-
             LOGGER.info("User [email=" + user.optString(User.USER_EMAIL) + "] reseted password");
+
+            Sessions.login(response, userId, true);
         } catch (final ServiceException e) {
             final String msg = langPropsService.get("resetPwdLabel") + " - " + e.getMessage();
             LOGGER.log(Level.ERROR, msg + "[name={0}, email={1}]", name, email);
@@ -474,8 +467,7 @@ public class LoginProcessor {
     @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
     public void showRegister(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
             throws Exception {
-        if (null != userQueryService.getCurrentUser(request)
-                || userMgmtService.tryLogInWithCookie(request, response)) {
+        if (null != request.getAttribute(Common.CURRENT_USER)) {
             response.sendRedirect(Latkes.getServePath());
 
             return;
@@ -504,13 +496,13 @@ public class LoginProcessor {
         }
 
         final String code = request.getParameter("code");
-        if (Strings.isEmptyOrNull(code)) { // Register Step 1
+        if (StringUtils.isBlank(code)) { // Register Step 1
             renderer.setTemplateName("verify/register.ftl");
         } else { // Register Step 2
             final JSONObject verifycode = verifycodeQueryService.getVerifycode(code);
             if (null == verifycode) {
                 dataModel.put(Keys.MSG, langPropsService.get("verifycodeExpiredLabel"));
-                renderer.setTemplateName("/error/custom.ftl");
+                renderer.setTemplateName("error/custom.ftl");
             } else {
                 renderer.setTemplateName("verify/register2.ftl");
 
@@ -521,10 +513,10 @@ public class LoginProcessor {
                 if (UserExt.USER_STATUS_C_VALID == user.optInt(UserExt.USER_STATUS)
                         || UserExt.NULL_USER_NAME.equals(user.optString(User.USER_NAME))) {
                     dataModel.put(Keys.MSG, langPropsService.get("userExistLabel"));
-                    renderer.setTemplateName("/error/custom.ftl");
+                    renderer.setTemplateName("error/custom.ftl");
                 } else {
                     referral = StringUtils.substringAfter(code, "r=");
-                    if (!Strings.isEmptyOrNull(referral)) {
+                    if (StringUtils.isNotBlank(referral)) {
                         dataModel.put(Common.REFERRAL, referral);
                     }
                 }
@@ -543,16 +535,12 @@ public class LoginProcessor {
     /**
      * Register Step 1.
      *
-     * @param context  the specified context
-     * @param request  the specified request
-     * @param response the specified response
-     * @throws ServletException servlet exception
-     * @throws IOException      io exception
+     * @param context the specified context
+     * @param request the specified request
      */
     @RequestProcessing(value = "/register", method = HTTPRequestMethod.POST)
     @Before(adviceClass = UserRegisterValidation.class)
-    public void register(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+    public void register(final HTTPRequestContext context, final HttpServletRequest request) {
         context.renderJSON();
 
         final JSONObject requestJSONObject = (JSONObject) request.getAttribute(Keys.REQUEST);
@@ -574,7 +562,7 @@ public class LoginProcessor {
             final JSONObject verifycode = new JSONObject();
             verifycode.put(Verifycode.BIZ_TYPE, Verifycode.BIZ_TYPE_C_REGISTER);
             String code = RandomStringUtils.randomAlphanumeric(6);
-            if (!Strings.isEmptyOrNull(referral)) {
+            if (StringUtils.isNotBlank(referral)) {
                 code += "r=" + referral;
             }
             verifycode.put(Verifycode.CODE, code);
@@ -610,13 +598,10 @@ public class LoginProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws ServletException servlet exception
-     * @throws IOException      io exception
      */
     @RequestProcessing(value = "/register2", method = HTTPRequestMethod.POST)
     @Before(adviceClass = UserRegister2Validation.class)
-    public void register2(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+    public void register2(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         context.renderJSON();
 
         final JSONObject requestJSONObject = (JSONObject) request.getAttribute(Keys.REQUEST);
@@ -624,7 +609,7 @@ public class LoginProcessor {
         final String password = requestJSONObject.optString(User.USER_PASSWORD); // Hashed
         final int appRole = requestJSONObject.optInt(UserExt.USER_APP_ROLE);
         final String referral = requestJSONObject.optString(Common.REFERRAL);
-        final String userId = requestJSONObject.optString(Common.USER_ID);
+        final String userId = requestJSONObject.optString(UserExt.USER_T_ID);
 
         String name = null;
         String email = null;
@@ -645,22 +630,22 @@ public class LoginProcessor {
 
             userMgmtService.addUser(user);
 
-            Sessions.login(request, response, user, false);
+            Sessions.login(response, userId, false);
 
             final String ip = Requests.getRemoteAddr(request);
-            userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), ip, true);
+            userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), ip, true, true);
 
-            if (!Strings.isEmptyOrNull(referral)) {
+            if (StringUtils.isNotBlank(referral) && !UserRegisterValidation.invalidUserName(referral)) {
                 final JSONObject referralUser = userQueryService.getUserByName(referral);
                 if (null != referralUser) {
                     final String referralId = referralUser.optString(Keys.OBJECT_ID);
                     // Point
                     pointtransferMgmtService.transfer(Pointtransfer.ID_C_SYS, userId,
                             Pointtransfer.TRANSFER_TYPE_C_INVITED_REGISTER,
-                            Pointtransfer.TRANSFER_SUM_C_INVITE_REGISTER, referralId, System.currentTimeMillis());
+                            Pointtransfer.TRANSFER_SUM_C_INVITE_REGISTER, referralId, System.currentTimeMillis(), "");
                     pointtransferMgmtService.transfer(Pointtransfer.ID_C_SYS, referralId,
                             Pointtransfer.TRANSFER_TYPE_C_INVITE_REGISTER,
-                            Pointtransfer.TRANSFER_SUM_C_INVITE_REGISTER, userId, System.currentTimeMillis());
+                            Pointtransfer.TRANSFER_SUM_C_INVITE_REGISTER, userId, System.currentTimeMillis(), "");
 
                     final JSONObject notification = new JSONObject();
                     notification.put(Notification.NOTIFICATION_USER_ID, referralId);
@@ -683,7 +668,7 @@ public class LoginProcessor {
                 if (StringUtils.isNotBlank(icGeneratorId) && !Pointtransfer.ID_C_SYS.equals(icGeneratorId)) {
                     pointtransferMgmtService.transfer(Pointtransfer.ID_C_SYS, icGeneratorId,
                             Pointtransfer.TRANSFER_TYPE_C_INVITECODE_USED,
-                            Pointtransfer.TRANSFER_SUM_C_INVITECODE_USED, userId, System.currentTimeMillis());
+                            Pointtransfer.TRANSFER_SUM_C_INVITECODE_USED, userId, System.currentTimeMillis(), "");
 
                     final JSONObject notification = new JSONObject();
                     notification.put(Notification.NOTIFICATION_USER_ID, icGeneratorId);
@@ -696,20 +681,9 @@ public class LoginProcessor {
             context.renderTrueResult();
 
             LOGGER.log(Level.INFO, "Registered a user [name={0}, email={1}]", name, email);
-
-            // Timeline
-            final JSONObject timeline = new JSONObject();
-            timeline.put(Common.USER_ID, user.optString(Keys.OBJECT_ID));
-            timeline.put(Common.TYPE, Common.NEW_USER);
-            String content = langPropsService.get("timelineNewUserLabel");
-            content = content.replace("{user}", "<a target='_blank' rel='nofollow' href='" + Latkes.getServePath()
-                    + "/member/" + name + "'>" + name + "</a>");
-            timeline.put(Common.CONTENT, content);
-
-            timelineMgmtService.addTimeline(timeline);
         } catch (final ServiceException e) {
             final String msg = langPropsService.get("registerFailLabel") + " - " + e.getMessage();
-            LOGGER.log(Level.ERROR, msg + "[name={0}, email={1}]", name, email);
+            LOGGER.log(Level.ERROR, msg + " [name={0}, email={1}]", name, email);
 
             context.renderMsg(msg);
         }
@@ -721,15 +695,20 @@ public class LoginProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws ServletException servlet exception
-     * @throws IOException      io exception
      */
     @RequestProcessing(value = "/login", method = HTTPRequestMethod.POST)
-    public void login(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws ServletException, IOException {
+    public void login(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         context.renderJSON().renderMsg(langPropsService.get("loginFailLabel"));
 
-        final JSONObject requestJSONObject = Requests.parseRequestJSONObject(request, response);
+        JSONObject requestJSONObject;
+        try {
+            requestJSONObject = Requests.parseRequestJSONObject(request, response);
+        } catch (final Exception e) {
+            context.renderMsg(langPropsService.get("paramsParseFailedLabel"));
+
+            return;
+        }
+
         final String nameOrEmail = requestJSONObject.optString("nameOrEmail");
 
         try {
@@ -745,21 +724,22 @@ public class LoginProcessor {
             }
 
             if (UserExt.USER_STATUS_C_INVALID == user.optInt(UserExt.USER_STATUS)) {
-                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), "", false);
+                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), "", false, true);
                 context.renderMsg(langPropsService.get("userBlockLabel"));
 
                 return;
             }
 
             if (UserExt.USER_STATUS_C_NOT_VERIFIED == user.optInt(UserExt.USER_STATUS)) {
-                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), "", false);
+                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), "", false, true);
                 context.renderMsg(langPropsService.get("notVerifiedLabel"));
 
                 return;
             }
 
-            if (UserExt.USER_STATUS_C_INVALID_LOGIN == user.optInt(UserExt.USER_STATUS)) {
-                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), "", false);
+            if (UserExt.USER_STATUS_C_INVALID_LOGIN == user.optInt(UserExt.USER_STATUS)
+                    || UserExt.USER_STATUS_C_DEACTIVATED == user.optInt(UserExt.USER_STATUS)) {
+                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), "", false, true);
                 context.renderMsg(langPropsService.get("invalidLoginLabel"));
 
                 return;
@@ -784,10 +764,10 @@ public class LoginProcessor {
 
             final String userPassword = user.optString(User.USER_PASSWORD);
             if (userPassword.equals(requestJSONObject.optString(User.USER_PASSWORD))) {
-                final String token = Sessions.login(request, response, user, requestJSONObject.optBoolean(Common.REMEMBER_LOGIN));
+                final String token = Sessions.login(response, userId, requestJSONObject.optBoolean(Common.REMEMBER_LOGIN));
 
                 final String ip = Requests.getRemoteAddr(request);
-                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), ip, true);
+                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), ip, true, true);
 
                 context.renderMsg("").renderTrueResult();
                 context.renderJSONValue(Keys.TOKEN, token);
@@ -814,17 +794,19 @@ public class LoginProcessor {
      * Logout.
      *
      * @param context the specified context
+     * @param request the specified request
      * @throws IOException io exception
      */
-    @RequestProcessing(value = {"/logout"}, method = HTTPRequestMethod.GET)
-    public void logout(final HTTPRequestContext context) throws IOException {
-        final HttpServletRequest httpServletRequest = context.getRequest();
+    @RequestProcessing(value = "/logout", method = HTTPRequestMethod.GET)
+    public void logout(final HTTPRequestContext context, final HttpServletRequest request) throws IOException {
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
+        if (null != user) {
+            Sessions.logout(user.optString(Keys.OBJECT_ID), context.getResponse());
+        }
 
-        Sessions.logout(httpServletRequest, context.getResponse());
-
-        String destinationURL = httpServletRequest.getParameter(Common.GOTO);
-        if (Strings.isEmptyOrNull(destinationURL)) {
-            destinationURL = "/";
+        String destinationURL = request.getParameter(Common.GOTO);
+        if (StringUtils.isBlank(destinationURL)) {
+            destinationURL = request.getHeader("referer");
         }
 
         context.getResponse().sendRedirect(destinationURL);

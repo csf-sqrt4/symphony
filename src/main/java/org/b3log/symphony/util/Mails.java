@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.util;
 
@@ -26,6 +26,9 @@ import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
+import org.b3log.latke.util.Crypts;
+import org.b3log.latke.util.URLs;
+import org.b3log.symphony.model.Common;
 import org.json.JSONObject;
 
 import javax.activation.DataHandler;
@@ -39,7 +42,6 @@ import javax.mail.internet.*;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -51,71 +53,90 @@ import java.util.regex.Pattern;
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://blog.thinkjava.top">VirutalPier</a>
  * @author <a href="https://github.com/snowflake3721">snowflake</a>
- * @version 1.2.6.6, Mar 10, 2017
+ * @version 1.2.6.8, Aug 30, 2018
  * @since 1.3.0
  */
 public final class Mails {
 
     /**
+     * Logger.
+     */
+    private static final Logger LOGGER = Logger.getLogger(Mails.class);
+
+    /**
      * Template name - verifycode.
      */
     public static final String TEMPLATE_NAME_VERIFYCODE = "sym_verifycode";
+
     /**
      * Template name - weekly.
      */
     public static final String TEMPLATE_NAME_WEEKLY = "sym_weekly";
-    /**
-     * Logger.
-     */
-    private static final Logger LOGGER = Logger.getLogger(Mails.class);
+
     /**
      * Mail channel.
      */
     private static final String MAIL_CHANNEL = Symphonys.get("mail.channel");
+
     /**
      * SendCloud API user.
      */
     private static final String SENDCLOUD_API_USER = Symphonys.get("mail.sendcloud.apiUser");
+
     /**
      * SendCloud API key.
      */
     private static final String SENDCLOUD_API_KEY = Symphonys.get("mail.sendcloud.apiKey");
+
     /**
      * SendCloud from.
      */
     private static final String SENDCLOUD_FROM = Symphonys.get("mail.sendcloud.from");
+
     /**
      * SendCloud batch API User.
      */
     private static final String SENDCLOUD_BATCH_API_USER = Symphonys.get("mail.sendcloud.batch.apiUser");
+
     /**
      * SendCloud batch API key.
      */
     private static final String SENDCLOUD_BATCH_API_KEY = Symphonys.get("mail.sendcloud.batch.apiKey");
+
     /**
      * SendCloud batch sender email.
      */
     private static final String SENDCLOUD_BATCH_FROM = Symphonys.get("mail.sendcloud.batch.from");
+
     /**
      * Aliyun accesskey.
      */
     private static final String ALIYUN_ACCESSKEY = Symphonys.get("mail.aliyun.accessKey");
+
     /**
      * Aliyun access secret.
      */
     private static final String ALIYUN_ACCESSSECRET = Symphonys.get("mail.aliyun.accessSecret");
+
     /**
      * Aliyun from.
      */
     private static final String ALIYUN_FROM = Symphonys.get("mail.aliyun.from");
+
     /**
      * Aliyun batch from.
      */
     private static final String ALIYUN_BATCH_FROM = Symphonys.get("mail.aliyun.batch.from");
+
     /**
      * Template configuration.
      */
-    private static final Configuration TEMPLATE_CFG = new Configuration(Configuration.VERSION_2_3_23);
+    private static final Configuration TEMPLATE_CFG = new Configuration(Skins.FREEMARKER_VER);
+
+    /**
+     * Domain - Channel mapping. &lt;163.com, aliyun&gt; https://github.com/b3log/symphony/issues/737
+     */
+    private static final Map<String, String> DOMAIN_CHANNEL = new HashMap<>();
 
     static {
         try {
@@ -125,6 +146,22 @@ public final class Mails {
             TEMPLATE_CFG.setLogTemplateExceptions(false);
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Loads mail templates failed", e);
+        }
+
+        final String mailDomains = Symphonys.get("mail.channel.mailDomains");
+        if (StringUtils.isNotBlank(mailDomains)) {
+            // aliyun:163.com,126.com;sendcloud:qq.com
+            final String[] channelMaps = StringUtils.split(mailDomains, ";");
+            for (int i = 0; i < channelMaps.length; i++) {
+                final String channelMap = channelMaps[i];
+                final String[] channelDomain = StringUtils.split(channelMap, ":");
+                final String channel = channelDomain[0];
+                final String[] domains = StringUtils.split(channelDomain[1], ",");
+                for (int j = 0; j < domains.length; j++) {
+                    final String domain = domains[j];
+                    DOMAIN_CHANNEL.put(domain, channel);
+                }
+            }
         }
     }
 
@@ -167,43 +204,49 @@ public final class Mails {
 
         Keys.fillServer(dataModel);
         Keys.fillRuntime(dataModel);
+        dataModel.put(Common.YEAR, String.valueOf(Calendar.getInstance().get(Calendar.YEAR)));
 
         try {
-            final Map<String, Object> formData = new HashMap<>();
-
             final Template template = TEMPLATE_CFG.getTemplate(templateName + ".ftl");
             final StringWriter stringWriter = new StringWriter();
             template.process(dataModel, stringWriter);
             stringWriter.close();
             final String html = stringWriter.toString();
 
-            if ("aliyun".equals(MAIL_CHANNEL)) {
-                aliSendHtml(ALIYUN_FROM, fromName, subject, toMail, html, ALIYUN_ACCESSKEY, ALIYUN_ACCESSSECRET);
+            final String domain = StringUtils.substringAfter(toMail, "@");
+            final String channel = DOMAIN_CHANNEL.getOrDefault(domain, MAIL_CHANNEL);
+            switch (channel) {
+                case "aliyun":
+                    aliSendHtml(ALIYUN_FROM, fromName, subject, toMail, html, ALIYUN_ACCESSKEY, ALIYUN_ACCESSSECRET);
 
-                return;
-            } else if ("local".equals(MAIL_CHANNEL.toLowerCase())) {
-                MailSender.getInstance().sendHTML(fromName, subject, toMail, html);
+                    return;
+                case "local":
+                    MailSender.getInstance().sendHTML(fromName, subject, toMail, html);
 
-                return;
+                    return;
+                case "sendcloud":
+                    final Map<String, Object> formData = new HashMap<>();
+                    formData.put("apiUser", SENDCLOUD_API_USER);
+                    formData.put("apiKey", SENDCLOUD_API_KEY);
+                    formData.put("from", SENDCLOUD_FROM);
+                    formData.put("fromName", fromName);
+                    formData.put("subject", subject);
+                    formData.put("to", toMail);
+                    formData.put("html", html);
+
+                    final HttpResponse response = HttpRequest.post("http://api.sendcloud.net/apiv2/mail/send").form(formData).timeout(5000).send();
+                    response.charset("UTF-8");
+                    LOGGER.debug(response.bodyText());
+                    response.close();
+
+                    return;
+                default:
+                    LOGGER.error("Unknown mail channel [" + channel + "]");
             }
-
-            // SendCloud
-            formData.put("apiUser", SENDCLOUD_API_USER);
-            formData.put("apiKey", SENDCLOUD_API_KEY);
-            formData.put("from", SENDCLOUD_FROM);
-            formData.put("fromName", fromName);
-            formData.put("subject", subject);
-            formData.put("to", toMail);
-            formData.put("html", html);
-
-            final HttpResponse response = HttpRequest.post("http://api.sendcloud.net/apiv2/mail/send").form(formData).send();
-            LOGGER.debug(response.bodyText());
-            response.close();
         } catch (final Exception e) {
-            LOGGER.log(Level.ERROR, "Send mail error", e);
+            LOGGER.log(Level.ERROR, "Sends a mail [subject=" + subject + ", to=" + toMail + "] failed", e);
         }
     }
-
 
     /**
      * Batch send HTML mails.
@@ -237,6 +280,8 @@ public final class Mails {
         }
 
         Keys.fillServer(dataModel);
+        Keys.fillRuntime(dataModel);
+        dataModel.put(Common.YEAR, String.valueOf(Calendar.getInstance().get(Calendar.YEAR)));
 
         try {
             final Map<String, Object> formData = new HashMap<>();
@@ -335,7 +380,7 @@ public final class Mails {
      * @param html     send html
      */
     private static void aliSendHtml(final String sendMail, final String fromName, final String subject, final String toMail,
-                                    final String html, final String accessKey, final String accessSecret) throws Exception {
+                                    final String html, final String accessKey, final String accessSecret) {
         final Map<String, Object> map = new HashMap<>();
         map.put("Action", "SingleSendMail");
         map.put("Format", "JSON");
@@ -356,23 +401,19 @@ public final class Mails {
         final String[] sortedKeys = map.keySet().toArray(new String[]{});
         Arrays.sort(sortedKeys);
         final StringBuilder canonicalizedQueryString = new StringBuilder();
-        try {
-            for (String key : sortedKeys) {
-                canonicalizedQueryString.append("&")
-                        .append(Mails.percentEncode(key)).append("=")
-                        .append(Mails.percentEncode(map.get(key).toString()));
-            }
-            final StringBuffer stringToSign = new StringBuffer();
-            stringToSign.append("POST");
-            stringToSign.append("&");
-            stringToSign.append(Mails.percentEncode("/"));
-            stringToSign.append("&");
-            stringToSign.append(Mails.percentEncode(canonicalizedQueryString.toString().substring(1)));
-
-            map.put("Signature", HmacSHA1.signString(stringToSign.toString(), accessSecret + "&"));
-        } catch (UnsupportedEncodingException exp) {
-            throw new RuntimeException("UTF-8 encoding is not supported.");
+        for (String key : sortedKeys) {
+            canonicalizedQueryString.append("&")
+                    .append(Mails.percentEncode(key)).append("=")
+                    .append(Mails.percentEncode(map.get(key).toString()));
         }
+        final StringBuffer stringToSign = new StringBuffer();
+        stringToSign.append("POST");
+        stringToSign.append("&");
+        stringToSign.append(Mails.percentEncode("/"));
+        stringToSign.append("&");
+        stringToSign.append(Mails.percentEncode(canonicalizedQueryString.toString().substring(1)));
+
+        map.put("Signature", Crypts.signHmacSHA1(stringToSign.toString(), accessSecret + "&"));
 
         final HttpResponse response = HttpRequest.post("https://dm.aliyuncs.com").form(map).send();
         LOGGER.debug(response.bodyText());
@@ -380,8 +421,8 @@ public final class Mails {
         response.close();
     }
 
-    private static String percentEncode(final String value) throws UnsupportedEncodingException {
-        return value != null ? URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    private static String percentEncode(final String value) {
+        return value != null ? URLs.encode(value).replace("+", "%20")
                 .replace("*", "%2A").replace("%7E", "~") : null;
     }
 
@@ -500,7 +541,7 @@ final class MailSender implements java.io.Serializable {
         return pics;
     }
 
-    private static void setTo(String[] to, MimeMessage message) throws MessagingException, AddressException {
+    private static void setTo(String[] to, MimeMessage message) throws MessagingException {
         // 指明邮件的收件人，现在发件人和收件人是一样的，那就是自己给自己发
         if (null != to && to.length > 0) {
             if (to.length == 1) {
@@ -519,19 +560,19 @@ final class MailSender implements java.io.Serializable {
 
     }
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
         System.out.println(CHARSET.toLowerCase());
 
-		/*
+        /*
          * MailSender mailSender = getInstance();
-		 *
-		 * String subject = "eml with Image"; String content =
-		 * "这是一封邮件正文带图片<img width=\"60px\" src=\"http://localhost:8080/images/logo-M301-161X105.png\" />的邮件"
-		 * ; String[] tos = { "bruceyang_it@163.com" };
-		 * mailSender.sendMessage(tos, subject, content, saved_path,
-		 * MailType.IMAGE);
-		 */
+         *
+         * String subject = "eml with Image"; String content =
+         * "这是一封邮件正文带图片<img width=\"60px\" src=\"http://localhost:8080/images/logo-M301-161X105.png\" />的邮件"
+         * ; String[] tos = { "bruceyang_it@163.com" };
+         * mailSender.sendMessage(tos, subject, content, saved_path,
+         * MailType.IMAGE);
+         */
 
     }
 
@@ -565,7 +606,7 @@ final class MailSender implements java.io.Serializable {
 
         // 5、发送邮件
         ts.sendMessage(message, message.getAllRecipients());
-        LOGGER.debug(tos.toString());
+        LOGGER.debug(Arrays.toString(tos));
         LOGGER.debug(subject);
         LOGGER.debug(content);
         ts.close();
@@ -713,7 +754,7 @@ final class MailSender implements java.io.Serializable {
     }
 
     private void saveMessageFile(MimeMessage message, String fileName)
-            throws MessagingException, FileNotFoundException, IOException {
+            throws MessagingException, IOException {
         message.saveChanges();
         // 将创建好的邮件写入到E盘以文件的形式进行保存
         FileOutputStream fos = null;
@@ -750,7 +791,6 @@ final class MailSender implements java.io.Serializable {
         if (null != toMailList && toMailList.size() > 0) {
             sendHTML(fromName, subject, toMailList.toArray(new String[toMailList.size()]), html);
         }
-
     }
 
     /**
@@ -762,24 +802,11 @@ final class MailSender implements java.io.Serializable {
      * @param html
      */
     public void sendHTML(final String fromName, final String subject, final String toMailSingle, String html) {
-
         sendHTML(fromName, subject, new String[]{toMailSingle}, html);
-
     }
 
-    public void sendHTML(final String fromName, final String subject, final String[] toMail, final String html) {
-
+    private void sendHTML(final String fromName, final String subject, final String[] toMail, final String html) {
         try {
-            /*
-             * Keys.fillServer(dataModel); Keys.fillRuntime(dataModel);
-			 *
-			 *
-			 * final Template template = TEMPLATE_CFG.getTemplate(templateName +
-			 * ".ftl"); final StringWriter stringWriter = new StringWriter();
-			 * template.process(dataModel, stringWriter); stringWriter.close();
-			 * final String content = stringWriter.toString();
-			 */
-
             getInstance().sendMessage(toMail, subject, html, saved_path, MailType.IMAGE);
             LOGGER.debug(html);
 
@@ -788,7 +815,7 @@ final class MailSender implements java.io.Serializable {
         }
     }
 
-    public static enum MailType {
+    private enum MailType {
         SIMPLE, IMAGE /* html with image */, MULTI/* Attachment TODO */
     }
 
@@ -927,5 +954,4 @@ class UrlDataSource implements DataSource {
     public void setFileTypeMap(FileTypeMap map) {
         typeMap = map;
     }
-
 }

@@ -1,25 +1,25 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.apache.commons.lang.StringUtils;
-import org.b3log.latke.logging.Logger;
 import org.b3log.latke.service.annotation.Service;
+import org.b3log.latke.util.Strings;
 import org.b3log.symphony.model.UserExt;
 import org.b3log.symphony.util.Symphonys;
 import org.json.JSONObject;
@@ -31,21 +31,16 @@ import java.awt.image.BufferedImage;
  * User avatar query service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.5.1.3, Aug 14, 2016
+ * @version 1.5.2.3, Oct 21, 2018
  * @since 0.3.0
  */
 @Service
 public class AvatarQueryService {
 
     /**
-     * Logger.
-     */
-    private static final Logger LOGGER = Logger.getLogger(AvatarQueryService.class);
-
-    /**
      * Default avatar URL.
      */
-    private static final String DEFAULT_AVATAR_URL = Symphonys.get("defaultThumbnailURL");
+    public static final String DEFAULT_AVATAR_URL = Symphonys.get("defaultThumbnailURL");
 
     /**
      * Fills the specified user thumbnail URL.
@@ -70,7 +65,7 @@ public class AvatarQueryService {
 
         final boolean qiniuEnabled = Symphonys.getBoolean("qiniu.enabled");
         if (qiniuEnabled) {
-            return DEFAULT_AVATAR_URL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/interlace/0/q/100";
+            return DEFAULT_AVATAR_URL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/interlace/0/q";
         } else {
             return DEFAULT_AVATAR_URL;
         }
@@ -89,25 +84,25 @@ public class AvatarQueryService {
             return DEFAULT_AVATAR_URL;
         }
 
-        final boolean qiniuEnabled = Symphonys.getBoolean("qiniu.enabled");
-
         String originalURL = user.optString(UserExt.USER_AVATAR_URL);
         if (StringUtils.isBlank(originalURL)) {
             originalURL = DEFAULT_AVATAR_URL;
         }
+        if (StringUtils.isBlank(originalURL) || Strings.contains(originalURL, new String[]{"<", ">", "\"", "'"})) {
+            originalURL = DEFAULT_AVATAR_URL;
+        }
 
         final String finerSize = String.valueOf(Integer.valueOf(size) + 32);
-
         String avatarURL = StringUtils.substringBeforeLast(originalURL, "?");
-
+        final boolean qiniuEnabled = Symphonys.getBoolean("qiniu.enabled");
         if (UserExt.USER_AVATAR_VIEW_MODE_C_ORIGINAL == viewMode) {
             if (qiniuEnabled) {
                 final String qiniuDomain = Symphonys.get("qiniu.domain");
 
                 if (!StringUtils.startsWith(avatarURL, qiniuDomain)) {
-                    return DEFAULT_AVATAR_URL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/interlace/0/q/100";
+                    return DEFAULT_AVATAR_URL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/interlace/0/q";
                 } else {
-                    return avatarURL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/interlace/0/q/100";
+                    return avatarURL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/interlace/0/q";
                 }
             } else {
                 return avatarURL;
@@ -116,9 +111,9 @@ public class AvatarQueryService {
             final String qiniuDomain = Symphonys.get("qiniu.domain");
 
             if (!StringUtils.startsWith(avatarURL, qiniuDomain)) {
-                return DEFAULT_AVATAR_URL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/format/jpg/interlace/0/q/100";
+                return DEFAULT_AVATAR_URL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/format/jpg/interlace/0/q";
             } else {
-                return avatarURL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/format/jpg/interlace/0/q/100";
+                return avatarURL + "?imageView2/1/w/" + finerSize + "/h/" + finerSize + "/format/jpg/interlace/0/q";
             }
         } else {
             return avatarURL;
@@ -127,7 +122,6 @@ public class AvatarQueryService {
 
     /**
      * Creates a avatar image with the specified hash string and size.
-     * <p>
      * <p>
      * Refers to: https://github.com/superhj1987/awesome-identicon
      * </p>

@@ -1,22 +1,23 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
+import com.qiniu.storage.Configuration;
 import com.qiniu.storage.UploadManager;
 import com.qiniu.util.Auth;
 import jodd.io.ZipUtil;
@@ -24,7 +25,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.FilterOperator;
@@ -47,13 +48,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
  * Post (article/comment) export service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.1, Jul 21, 2016
+ * @version 1.0.0.2, Apr 5, 2018
  * @since 1.4.0
  */
 @Service
@@ -181,7 +183,7 @@ public class PostExportService {
 
         final boolean succ = null != pointtransferMgmtService.transfer(userId, Pointtransfer.ID_C_SYS,
                 Pointtransfer.TRANSFER_TYPE_C_DATA_EXPORT, Pointtransfer.TRANSFER_SUM_C_DATA_EXPORT,
-                String.valueOf(posts.length()), System.currentTimeMillis());
+                String.valueOf(posts.length()), System.currentTimeMillis(), "");
         if (!succ) {
             return null;
         }
@@ -195,11 +197,11 @@ public class PostExportService {
         final File localFile = new File(localFilePath);
 
         try {
-            final byte[] data = posts.toString(2).getBytes("UTF-8");
+            final byte[] data = posts.toString(2).getBytes(StandardCharsets.UTF_8);
 
-            OutputStream output = new FileOutputStream(localFile);
-            IOUtils.write(data, output);
-            IOUtils.closeQuietly(output);
+            try (final OutputStream output = new FileOutputStream(localFile)) {
+                IOUtils.write(data, output);
+            }
 
             final File zipFile = ZipUtil.zip(localFile);
 
@@ -208,7 +210,7 @@ public class PostExportService {
 
             if (Symphonys.getBoolean("qiniu.enabled")) {
                 final Auth auth = Auth.create(Symphonys.get("qiniu.accessKey"), Symphonys.get("qiniu.secretKey"));
-                final UploadManager uploadManager = new UploadManager();
+                final UploadManager uploadManager = new UploadManager(new Configuration());
 
                 uploadManager.put(zipData, fileKey, auth.uploadToken(Symphonys.get("qiniu.bucket")),
                         null, "application/zip", false);

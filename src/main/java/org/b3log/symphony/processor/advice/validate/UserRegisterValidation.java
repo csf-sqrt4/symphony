@@ -1,27 +1,26 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor.advice.validate;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
-import org.b3log.latke.ioc.inject.Named;
-import org.b3log.latke.ioc.inject.Singleton;
+import org.b3log.latke.ioc.Inject;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
@@ -47,10 +46,9 @@ import java.util.Map;
  *
  * @author <a href="mailto:wmainlove@gmail.com">Love Yao</a>
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.5.2.11, Jan 10, 2017
+ * @version 1.5.2.12, Aug 12, 2018
  * @since 0.2.0
  */
-@Named
 @Singleton
 public class UserRegisterValidation extends BeforeRequestProcessAdvice {
 
@@ -162,26 +160,6 @@ public class UserRegisterValidation extends BeforeRequestProcessAdvice {
         return password.length() < MIN_PWD_LENGTH || password.length() > MAX_PWD_LENGTH;
     }
 
-    /**
-     * Checks whether the specified captcha is invalid.
-     *
-     * @param captcha the specified captcha
-     * @param request the specified request
-     * @return {@code true} if it is invalid, returns {@code false} otherwise
-     */
-    public static boolean invalidCaptcha(final String captcha, final HttpServletRequest request) {
-        if (Strings.isEmptyOrNull(captcha) || captcha.length() != CAPTCHA_LENGTH) {
-            return true;
-        }
-
-        boolean ret = !CaptchaProcessor.CAPTCHAS.contains(captcha);
-        if (!ret) {
-            CaptchaProcessor.CAPTCHAS.remove(captcha);
-        }
-
-        return ret;
-    }
-
     @Override
     public void doAdvice(final HTTPRequestContext context, final Map<String, Object> args) throws RequestProcessAdviceException {
         final HttpServletRequest request = context.getRequest();
@@ -224,7 +202,7 @@ public class UserRegisterValidation extends BeforeRequestProcessAdvice {
         if (!useInvitationLink && "2".equals(option.optString(Option.OPTION_VALUE))) {
             final String invitecode = requestJSONObject.optString(Invitecode.INVITECODE);
 
-            if (Strings.isEmptyOrNull(invitecode) || INVITECODE_LENGHT != invitecode.length()) {
+            if (StringUtils.isBlank(invitecode) || INVITECODE_LENGHT != invitecode.length()) {
                 checkField(true, "registerFailLabel", "invalidInvitecodeLabel");
             }
 
@@ -241,7 +219,7 @@ public class UserRegisterValidation extends BeforeRequestProcessAdvice {
         // open register
         if (useInvitationLink || "0".equals(option.optString(Option.OPTION_VALUE))) {
             final String captcha = requestJSONObject.optString(CaptchaProcessor.CAPTCHA);
-            checkField(invalidCaptcha(captcha, request), "registerFailLabel", "captchaErrorLabel");
+            checkField(CaptchaProcessor.invalidCaptcha(captcha), "registerFailLabel", "captchaErrorLabel");
         }
 
         final String name = requestJSONObject.optString(User.USER_NAME);
@@ -256,6 +234,7 @@ public class UserRegisterValidation extends BeforeRequestProcessAdvice {
 
         checkField(invalidUserName(name), "registerFailLabel", "invalidUserNameLabel");
         checkField(!Strings.isEmail(email), "registerFailLabel", "invalidEmailLabel");
+        checkField(!UserExt.isWhitelistMailDomain(email), "registerFailLabel", "invalidEmail1Label");
         checkField(UserExt.USER_APP_ROLE_C_HACKER != appRole
                 && UserExt.USER_APP_ROLE_C_PAINTER != appRole, "registerFailLabel", "invalidAppRoleLabel");
         //checkField(invalidUserPassword(password), "registerFailLabel", "invalidPasswordLabel");

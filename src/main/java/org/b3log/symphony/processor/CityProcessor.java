@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
@@ -21,7 +21,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.time.DateUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.model.Pagination;
 import org.b3log.latke.model.User;
 import org.b3log.latke.service.LangPropsService;
@@ -31,9 +31,8 @@ import org.b3log.latke.servlet.annotation.After;
 import org.b3log.latke.servlet.annotation.Before;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
 import org.b3log.latke.util.Paginator;
-import org.b3log.latke.util.Strings;
 import org.b3log.symphony.model.Article;
 import org.b3log.symphony.model.Common;
 import org.b3log.symphony.model.Option;
@@ -62,7 +61,7 @@ import java.util.Map;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://zephyr.b3log.org">Zephyr</a>
- * @version 1.3.1.8, Dec 24, 2016
+ * @version 1.3.1.10, Aug 9, 2018
  * @since 1.3.0
  */
 @RequestProcessor
@@ -129,8 +128,8 @@ public class CityProcessor {
 
         final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
 
-        dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-        dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
         dataModelService.fillSideTags(dataModel);
         dataModelService.fillLatestCmts(dataModel);
 
@@ -138,7 +137,7 @@ public class CityProcessor {
         dataModel.put(Article.ARTICLES, articles); // an empty list to avoid null check in template
         dataModel.put(Common.SELECTED, Common.CITY);
 
-        final JSONObject user = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (!UserExt.finshedGuide(user)) {
             response.sendRedirect(Latkes.getServePath() + "/guide");
 
@@ -171,12 +170,7 @@ public class CityProcessor {
             return;
         }
 
-        String pageNumStr = request.getParameter("p");
-        if (Strings.isEmptyOrNull(pageNumStr) || !Strings.isNumeric(pageNumStr)) {
-            pageNumStr = "1";
-        }
-
-        final int pageNum = Integer.valueOf(pageNumStr);
+        final int pageNum = Paginator.getPage(request);
         final int pageSize = user.optInt(UserExt.USER_LIST_PAGE_SIZE);
         final int windowSize = Symphonys.getInt("cityArticlesWindowSize");
 
@@ -223,9 +217,8 @@ public class CityProcessor {
 
         dataModel.put(Common.CURRENT, "/users");
 
-        final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
-        dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-        dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
         dataModelService.fillSideTags(dataModel);
         dataModelService.fillLatestCmts(dataModel);
 
@@ -233,7 +226,7 @@ public class CityProcessor {
         dataModel.put(User.USERS, users);
         dataModel.put(Common.SELECTED, Common.CITY);
 
-        final JSONObject user = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (!UserExt.finshedGuide(user)) {
             response.sendRedirect(Latkes.getServePath() + "/guide");
 
@@ -265,13 +258,8 @@ public class CityProcessor {
             return;
         }
 
-        String pageNumStr = request.getParameter("p");
-        if (Strings.isEmptyOrNull(pageNumStr) || !Strings.isNumeric(pageNumStr)) {
-            pageNumStr = "1";
-        }
-
-        final int pageNum = Integer.valueOf(pageNumStr);
-        final int pageSize = Symphonys.getInt("cityUuserPageSize");
+        final int pageNum = Paginator.getPage(request);
+        final int pageSize = Symphonys.getInt("cityUserPageSize");
         final int windowSize = Symphonys.getInt("cityUsersWindowSize");
 
         final JSONObject requestJSONObject = new JSONObject();

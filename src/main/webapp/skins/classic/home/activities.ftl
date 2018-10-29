@@ -1,3 +1,22 @@
+<#--
+
+    Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+    Copyright (C) 2012-2018, b3log.org & hacpai.com
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+-->
 <#include "../macro-head.ftl">
 <!DOCTYPE html>
 <html>
@@ -93,6 +112,20 @@
                                             </h2>
                                             <span class="ft-fade content-reset">
                                             ${activityGobangTitleLabel}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li>
+                                    <div class='fn-flex'>
+                                        <div class="avatar tooltipped tooltipped-ne"
+                                             aria-label="${chatRoomLabel}" style="background-image:url('${staticServePath}/images/activities/chat.png')"></div>
+                                        <div class="fn-flex-1">
+                                            <h2>
+                                                <a href="${servePath}/cr">${chatRoomLabel}</a>
+                                            </h2>
+                                            <span class="ft-fade content-reset">
+                                            ${activityChatTitleLabel}
                                             </span>
                                         </div>
                                     </div>

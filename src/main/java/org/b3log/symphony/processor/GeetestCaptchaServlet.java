@@ -1,29 +1,29 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
 import org.b3log.latke.Keys;
+import org.b3log.symphony.model.Common;
 import org.b3log.symphony.util.GeetestLib;
 import org.b3log.symphony.util.Sessions;
 import org.b3log.symphony.util.Symphonys;
 import org.json.JSONObject;
 
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -44,9 +44,8 @@ public class GeetestCaptchaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
     @Override
-    protected void doGet(final HttpServletRequest request,
-            final HttpServletResponse response) throws ServletException, IOException {
-        final JSONObject currentUser = Sessions.currentUser(request);
+    protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws IOException {
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null == currentUser) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
 
@@ -57,7 +56,9 @@ public class GeetestCaptchaServlet extends HttpServlet {
         String resStr = "{}";
         final String userId = currentUser.optString(Keys.OBJECT_ID);
         final int gtServerStatus = gtSdk.preProcess(userId);
-        request.getSession().setAttribute(gtSdk.gtServerStatusSessionKey, gtServerStatus);
+        final JSONObject status = new JSONObject();
+        status.put(Common.DATA, gtServerStatus);
+        Sessions.put(userId + GeetestLib.gtServerStatusSessionKey, status);
         resStr = gtSdk.getResponseStr();
 
         final PrintWriter out = response.getWriter();

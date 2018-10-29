@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony;
 
@@ -23,13 +23,10 @@ import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
 import org.b3log.latke.event.EventManager;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
+import org.b3log.latke.ioc.BeanManager;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.model.User;
 import org.b3log.latke.repository.jdbc.JdbcRepository;
-import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.servlet.AbstractServletListener;
 import org.b3log.latke.util.*;
 import org.b3log.symphony.cache.DomainCache;
@@ -41,9 +38,8 @@ import org.b3log.symphony.model.UserExt;
 import org.b3log.symphony.repository.OptionRepository;
 import org.b3log.symphony.repository.UserRepository;
 import org.b3log.symphony.service.InitMgmtService;
-import org.b3log.symphony.service.UserMgmtService;
 import org.b3log.symphony.service.UserQueryService;
-import org.b3log.symphony.util.Crypts;
+import org.b3log.symphony.util.Sessions;
 import org.b3log.symphony.util.Symphonys;
 import org.json.JSONObject;
 
@@ -60,39 +56,34 @@ import java.util.Locale;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author Bill Ho
- * @version 3.19.9.35, Aug 12, 2017
+ * @version 3.19.10.20, Oct 24, 2018
  * @since 0.2.0
  */
 public final class SymphonyServletListener extends AbstractServletListener {
 
     /**
-     * Symphony version.
-     */
-    public static final String VERSION = "2.1.0";
-    /**
-     * JSONO print indent factor.
-     */
-    public static final int JSON_PRINT_INDENT_FACTOR = 4;
-    /**
      * Logger.
      */
     private static final Logger LOGGER = Logger.getLogger(SymphonyServletListener.class);
+
+    /**
+     * Symphony version.
+     */
+    public static final String VERSION = "3.4.2";
+
     /**
      * Bean manager.
      */
-    private LatkeBeanManager beanManager;
+    private BeanManager beanManager;
 
     @Override
     public void contextInitialized(final ServletContextEvent servletContextEvent) {
         Stopwatchs.start("Context Initialized");
+        Latkes.USER_AGENT = Symphonys.USER_AGENT_BOT;
         Latkes.setScanPath("org.b3log.symphony");
         super.contextInitialized(servletContextEvent);
 
-        // del this after done TODO: https://github.com/b3log/symphony/issues/98
-        final String skinDirName = Symphonys.get("skinDirName");
-        Latkes.loadSkin(skinDirName);
-
-        beanManager = Lifecycle.getBeanManager();
+        beanManager = BeanManager.getInstance();
 
         final InitMgmtService initMgmtService = beanManager.getReference(InitMgmtService.class);
         initMgmtService.initSym();
@@ -160,21 +151,6 @@ public final class SymphonyServletListener extends AbstractServletListener {
 
     @Override
     public void sessionDestroyed(final HttpSessionEvent httpSessionEvent) {
-        final HttpSession session = httpSessionEvent.getSession();
-
-        final Object userObj = session.getAttribute(User.USER);
-        if (null != userObj) { // User logout
-            final JSONObject user = (JSONObject) userObj;
-
-            final UserMgmtService userMgmtService = beanManager.getReference(UserMgmtService.class);
-
-            try {
-                userMgmtService.updateOnlineStatus(user.optString(Keys.OBJECT_ID), "", false);
-            } catch (final ServiceException e) {
-                LOGGER.log(Level.ERROR, "Changes user online from [true] to [false] failed", e);
-            }
-        }
-
         super.sessionDestroyed(httpSessionEvent);
     }
 
@@ -198,24 +174,27 @@ public final class SymphonyServletListener extends AbstractServletListener {
                 || StringUtils.containsIgnoreCase(userAgentStr, "MQQBrowser")
                 || StringUtils.containsIgnoreCase(userAgentStr, "iphone")
                 || StringUtils.containsIgnoreCase(userAgentStr, "MicroMessenger")
-                || StringUtils.containsIgnoreCase(userAgentStr, "CFNetwork")) {
+                || StringUtils.containsIgnoreCase(userAgentStr, "CFNetwork")
+                || StringUtils.containsIgnoreCase(userAgentStr, "Android")) {
             browserType = BrowserType.MOBILE_BROWSER;
         } else if (StringUtils.containsIgnoreCase(userAgentStr, "Iframely")
                 || StringUtils.containsIgnoreCase(userAgentStr, "Google")
-                || StringUtils.containsIgnoreCase(userAgentStr, "B3log")) {
+                || StringUtils.containsIgnoreCase(userAgentStr, "BUbiNG")
+                || StringUtils.containsIgnoreCase(userAgentStr, "ltx71")) {
             browserType = BrowserType.ROBOT;
         } else if (BrowserType.UNKNOWN == browserType) {
             if (!StringUtils.containsIgnoreCase(userAgentStr, "Java")
                     && !StringUtils.containsIgnoreCase(userAgentStr, "MetaURI")
-                    && !StringUtils.containsIgnoreCase(userAgentStr, "Feed")) {
+                    && !StringUtils.containsIgnoreCase(userAgentStr, "Feed")
+                    && !StringUtils.containsIgnoreCase(userAgentStr, "okhttp")
+                    && !StringUtils.containsIgnoreCase(userAgentStr, "Sym")) {
                 LOGGER.log(Level.WARN, "Unknown client [UA=" + userAgentStr + ", remoteAddr="
-                        + Requests.getRemoteAddr(httpServletRequest) + ", URI="
-                        + httpServletRequest.getRequestURI() + "]");
+                        + Requests.getRemoteAddr(httpServletRequest) + ", URI=" + httpServletRequest.getRequestURI() + "]");
             }
         }
 
         if (BrowserType.ROBOT == browserType) {
-            LOGGER.log(Level.DEBUG, "Request made from a search engine[User-Agent={0}]",
+            LOGGER.log(Level.DEBUG, "Request made from a search engine [User-Agent={0}]",
                     httpServletRequest.getHeader(Common.USER_AGENT));
             httpServletRequest.setAttribute(Keys.HttpRequest.IS_SEARCH_ENGINE_BOT, true);
 
@@ -232,12 +211,6 @@ public final class SymphonyServletListener extends AbstractServletListener {
 
         httpServletRequest.setAttribute(Common.IS_MOBILE, BrowserType.MOBILE_BROWSER == browserType);
 
-        // Gets the session of this request
-        final HttpSession session = httpServletRequest.getSession();
-        LOGGER.log(Level.TRACE, "Gets a session[id={0}, remoteAddr={1}, User-Agent={2}, isNew={3}]",
-                session.getId(), httpServletRequest.getRemoteAddr(),
-                httpServletRequest.getHeader(Common.USER_AGENT), session.isNew());
-
         resolveSkinDir(httpServletRequest);
     }
 
@@ -249,13 +222,16 @@ public final class SymphonyServletListener extends AbstractServletListener {
             super.requestDestroyed(servletRequestEvent);
 
             final HttpServletRequest request = (HttpServletRequest) servletRequestEvent.getServletRequest();
-            final boolean isStatic = (Boolean) request.getAttribute(Keys.HttpRequest.IS_REQUEST_STATIC_RESOURCE);
-            if (!isStatic) {
+            final Object isStaticObj = request.getAttribute(Keys.HttpRequest.IS_REQUEST_STATIC_RESOURCE);
+            if (null != isStaticObj && !(Boolean) isStaticObj) {
                 Stopwatchs.end();
 
-                final long elapsed = Stopwatchs.getElapsed("Request initialized [" + request.getRequestURI() + "]");
-                if (elapsed > Symphonys.getInt("perfromance.threshold")) {
-                    LOGGER.log(Level.INFO, "Stopwatch: {0}{1}", Strings.LINE_SEPARATOR, Stopwatchs.getTimingStat());
+                final int threshold = Symphonys.getInt("performance.threshold");
+                if (0 < threshold) {
+                    final long elapsed = Stopwatchs.getElapsed("Request initialized [" + request.getRequestURI() + "]");
+                    if (elapsed >= threshold) {
+                        LOGGER.log(Level.INFO, "Stopwatch: {0}{1}", Strings.LINE_SEPARATOR, Stopwatchs.getTimingStat());
+                    }
                 }
             }
         } finally {
@@ -274,6 +250,11 @@ public final class SymphonyServletListener extends AbstractServletListener {
 
         request.setAttribute(Keys.TEMAPLTE_DIR_NAME, (Boolean) request.getAttribute(Common.IS_MOBILE)
                 ? "mobile" : "classic");
+        String templateDirName = (Boolean) request.getAttribute(Common.IS_MOBILE) ? "mobile" : "classic";
+        request.setAttribute(Keys.TEMAPLTE_DIR_NAME, templateDirName);
+
+        final HttpSession httpSession = request.getSession();
+        httpSession.setAttribute(Keys.TEMAPLTE_DIR_NAME, templateDirName);
 
         try {
             final UserQueryService userQueryService = beanManager.getReference(UserQueryService.class);
@@ -309,7 +290,7 @@ public final class SymphonyServletListener extends AbstractServletListener {
                         final JSONObject cookieJSONObject = new JSONObject(value);
 
                         final String userId = cookieJSONObject.optString(Keys.OBJECT_ID);
-                        if (Strings.isEmptyOrNull(userId)) {
+                        if (StringUtils.isBlank(userId)) {
                             break;
                         }
 
@@ -329,11 +310,14 @@ public final class SymphonyServletListener extends AbstractServletListener {
                 }
             }
 
-            request.setAttribute(Keys.TEMAPLTE_DIR_NAME, (Boolean) request.getAttribute(Common.IS_MOBILE)
-                    ? user.optString(UserExt.USER_MOBILE_SKIN) : user.optString(UserExt.USER_SKIN));
+            final String skin = (Boolean) request.getAttribute(Common.IS_MOBILE)
+                    ? user.optString(UserExt.USER_MOBILE_SKIN) : user.optString(UserExt.USER_SKIN);
+
+            request.setAttribute(Keys.TEMAPLTE_DIR_NAME, skin);
+            httpSession.setAttribute(Keys.TEMAPLTE_DIR_NAME, skin);
             request.setAttribute(UserExt.USER_AVATAR_VIEW_MODE, user.optInt(UserExt.USER_AVATAR_VIEW_MODE));
 
-            request.setAttribute(User.USER, user);
+            request.setAttribute(Common.CURRENT_USER, user);
 
             final Locale locale = Locales.getLocale(user.optString(UserExt.USER_LANGUAGE));
             Locales.setLocale(locale);

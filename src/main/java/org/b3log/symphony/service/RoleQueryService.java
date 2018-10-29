@@ -1,24 +1,24 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -32,7 +32,6 @@ import org.b3log.latke.util.Paginator;
 import org.b3log.latke.util.Strings;
 import org.b3log.symphony.model.Permission;
 import org.b3log.symphony.model.Role;
-import org.b3log.symphony.model.UserExt;
 import org.b3log.symphony.repository.PermissionRepository;
 import org.b3log.symphony.repository.RolePermissionRepository;
 import org.b3log.symphony.repository.RoleRepository;
@@ -46,7 +45,7 @@ import java.util.*;
  * Role query service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.5.0.2, Apr 23, 2017
+ * @version 1.6.0.0, Jun 23, 2018
  * @since 1.8.0
  */
 @Service
@@ -86,6 +85,24 @@ public class RoleQueryService {
      */
     @Inject
     private LangPropsService langPropsService;
+
+    /**
+     * Count the specified role's uses.
+     *
+     * @param roleId the specified role id
+     * @return use count, returns integer max value if fails
+     */
+    public int countUser(final String roleId) {
+        try {
+            final Query userCountQuery = new Query().setFilter(new PropertyFilter(User.USER_ROLE, FilterOperator.EQUAL, roleId));
+
+            return (int) userRepository.count(userCountQuery);
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Count role [id=" + roleId + "] uses failed", e);
+
+            return Integer.MAX_VALUE;
+        }
+    }
 
     /**
      * Checks whether the specified user has the specified requisite permissions.
@@ -128,15 +145,6 @@ public class RoleQueryService {
      * @return an role, returns {@code null} if not found
      */
     public JSONObject getRole(final String roleId) {
-        if (UserExt.DEFAULT_CMTER_ROLE.equals(roleId)) { // virtual role
-            final JSONObject ret = new JSONObject();
-
-            ret.put(Role.ROLE_NAME, langPropsService.get(UserExt.DEFAULT_CMTER_ROLE + "NameLabel"));
-            ret.put(Role.ROLE_DESCRIPTION, langPropsService.get(UserExt.DEFAULT_CMTER_ROLE + "DescLabel"));
-
-            return ret;
-        }
-
         try {
             final JSONObject ret = roleRepository.get(roleId);
 
@@ -354,7 +362,7 @@ public class RoleQueryService {
         pagination.put(Pagination.PAGINATION_PAGE_NUMS, pageNums);
 
         final JSONArray data = result.optJSONArray(Keys.RESULTS);
-        final List<JSONObject> roles = CollectionUtils.<JSONObject>jsonArrayToList(data);
+        final List<JSONObject> roles = CollectionUtils.jsonArrayToList(data);
 
         try {
             for (final JSONObject role : roles) {

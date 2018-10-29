@@ -1,28 +1,28 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
+import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
-import org.b3log.latke.model.User;
 import org.b3log.latke.repository.*;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
@@ -34,6 +34,7 @@ import org.b3log.symphony.util.Emotions;
 import org.b3log.symphony.util.Symphonys;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.owasp.encoder.Encode;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -43,7 +44,7 @@ import java.util.List;
  * Pointtransfer query service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.21.2.1, May 6, 2017
+ * @version 1.21.4.1, Oct 1, 2018
  * @since 1.3.0
  */
 @Service
@@ -249,7 +250,8 @@ public class PointtransferQueryService {
                         || ("5".equals(typeStr) && userId.equals(fromId))
                         || ("9".equals(typeStr) && userId.equals(toId))
                         || ("14".equals(typeStr) && userId.equals(toId))
-                        || ("22".equals(typeStr) && userId.equals(toId))) {
+                        || ("22".equals(typeStr) && userId.equals(toId))
+                        || ("34".equals(typeStr) && userId.equals(toId))) {
                     typeStr += "In";
                 }
 
@@ -286,7 +288,7 @@ public class PointtransferQueryService {
 
                         final String addArticleLink = "<a href=\""
                                 + addArticle.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + addArticle.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(addArticle.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", addArticleLink);
 
                         break;
@@ -300,7 +302,7 @@ public class PointtransferQueryService {
 
                         final String updateArticleLink = "<a href=\""
                                 + updateArticle.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + updateArticle.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(updateArticle.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", updateArticleLink);
 
                         break;
@@ -318,13 +320,12 @@ public class PointtransferQueryService {
 
                         final String commentArticleLink = "<a href=\""
                                 + commentArticle.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + commentArticle.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(commentArticle.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", commentArticleLink);
 
                         if ("3In".equals(typeStr)) {
                             final JSONObject commenter = userRepository.get(fromId);
-                            final String commenterLink = "<a href=\"/member/" + commenter.optString(User.USER_NAME) + "\">"
-                                    + commenter.optString(User.USER_NAME) + "</a>";
+                            final String commenterLink = UserExt.getUserLink(commenter);
 
                             desTemplate = desTemplate.replace("{user}", commenterLink);
                         }
@@ -344,7 +345,7 @@ public class PointtransferQueryService {
 
                         final String commentArticleLink32 = "<a href=\""
                                 + commentArticle32.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + commentArticle32.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(commentArticle32.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", commentArticleLink32);
 
                         break;
@@ -358,7 +359,7 @@ public class PointtransferQueryService {
 
                         final String addArticleRewordLink = "<a href=\""
                                 + addArticleReword.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + addArticleReword.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(addArticleReword.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", addArticleRewordLink);
 
                         break;
@@ -371,8 +372,7 @@ public class PointtransferQueryService {
                         final String rewardArticleId = reward.optString(Reward.DATA_ID);
 
                         final JSONObject sender = userRepository.get(senderId);
-                        final String senderLink = "<a href=\"/member/" + sender.optString(User.USER_NAME) + "\">"
-                                + sender.optString(User.USER_NAME) + "</a>";
+                        final String senderLink = UserExt.getUserLink(sender);
                         desTemplate = desTemplate.replace("{user}", senderLink);
 
                         final JSONObject articleReward = articleRepository.get(rewardArticleId);
@@ -384,7 +384,7 @@ public class PointtransferQueryService {
 
                         final String articleRewardLink = "<a href=\""
                                 + articleReward.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + articleReward.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(articleReward.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", articleRewardLink);
 
                         break;
@@ -396,25 +396,19 @@ public class PointtransferQueryService {
                         } else {
                             user14 = userRepository.get(toId);
                         }
-                        final String commentId14 = reward14.optString(Reward.DATA_ID);
-                        final JSONObject comment14 = commentRepository.get(commentId14);
-                        if (null == comment14) {
+                        final String userLink14 = UserExt.getUserLink(user14);
+                        desTemplate = desTemplate.replace("{user}", userLink14);
+                        final String articleId14 = reward14.optString(Reward.DATA_ID);
+                        final JSONObject article14 = articleRepository.get(articleId14);
+                        if (null == article14) {
                             desTemplate = langPropsService.get("removedLabel");
 
                             break;
                         }
-
-                        final String articleId14 = comment14.optString(Comment.COMMENT_ON_ARTICLE_ID);
-
-                        final String userLink14 = "<a href=\"/member/" + user14.optString(User.USER_NAME) + "\">"
-                                + user14.optString(User.USER_NAME) + "</a>";
-                        desTemplate = desTemplate.replace("{user}", userLink14);
-
-                        final JSONObject article14 = articleRepository.get(articleId14);
-                        final String articleLink = "<a href=\""
+                        final String articleLink14 = "<a href=\""
                                 + article14.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + article14.optString(Article.ARTICLE_TITLE) + "</a>";
-                        desTemplate = desTemplate.replace("{article}", articleLink);
+                                + Encode.forHtml(article14.optString(Article.ARTICLE_TITLE)) + "</a>";
+                        desTemplate = desTemplate.replace("{article}", articleLink14);
 
                         break;
                     case Pointtransfer.TRANSFER_TYPE_C_ARTICLE_THANK:
@@ -433,34 +427,30 @@ public class PointtransferQueryService {
                             break;
                         }
 
-                        final String userLink22 = "<a href=\"/member/" + user22.optString(User.USER_NAME) + "\">"
-                                + user22.optString(User.USER_NAME) + "</a>";
+                        final String userLink22 = UserExt.getUserLink(user22);
                         desTemplate = desTemplate.replace("{user}", userLink22);
 
                         final String articleLink22 = "<a href=\""
                                 + article22.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + article22.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(article22.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", articleLink22);
 
                         break;
                     case Pointtransfer.TRANSFER_TYPE_C_INVITE_REGISTER:
                         final JSONObject newUser = userRepository.get(dataId);
-                        final String newUserLink = "<a href=\"/member/" + newUser.optString(User.USER_NAME) + "\">"
-                                + newUser.optString(User.USER_NAME) + "</a>";
+                        final String newUserLink = UserExt.getUserLink(newUser);
                         desTemplate = desTemplate.replace("{user}", newUserLink);
 
                         break;
                     case Pointtransfer.TRANSFER_TYPE_C_INVITED_REGISTER:
                         final JSONObject referralUser = userRepository.get(dataId);
-                        final String referralUserLink = "<a href=\"/member/" + referralUser.optString(User.USER_NAME) + "\">"
-                                + referralUser.optString(User.USER_NAME) + "</a>";
+                        final String referralUserLink = UserExt.getUserLink(referralUser);
                         desTemplate = desTemplate.replace("{user}", referralUserLink);
 
                         break;
                     case Pointtransfer.TRANSFER_TYPE_C_INVITECODE_USED:
                         final JSONObject newUser1 = userRepository.get(dataId);
-                        final String newUserLink1 = "<a href=\"/member/" + newUser1.optString(User.USER_NAME) + "\">"
-                                + newUser1.optString(User.USER_NAME) + "</a>";
+                        final String newUserLink1 = UserExt.getUserLink(newUser1);
                         desTemplate = desTemplate.replace("{user}", newUserLink1);
 
                         break;
@@ -474,6 +464,7 @@ public class PointtransferQueryService {
                     case Pointtransfer.TRANSFER_TYPE_C_ACTIVITY_EATINGSNAKE_COLLECT:
                     case Pointtransfer.TRANSFER_TYPE_C_ACTIVITY_GOBANG:
                     case Pointtransfer.TRANSFER_TYPE_C_ACTIVITY_GOBANG_COLLECT:
+                    case Pointtransfer.TRANSFER_TYPE_C_REPORT_HANDLED:
                         break;
                     case Pointtransfer.TRANSFER_TYPE_C_AT_PARTICIPANTS:
                         final JSONObject comment20 = commentRepository.get(dataId);
@@ -493,7 +484,7 @@ public class PointtransferQueryService {
 
                         final String ArticleLink20 = "<a href=\""
                                 + atParticipantsArticle.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + atParticipantsArticle.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(atParticipantsArticle.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", ArticleLink20);
 
                         break;
@@ -507,7 +498,7 @@ public class PointtransferQueryService {
 
                         final String stickArticleLink = "<a href=\""
                                 + stickArticle.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + stickArticle.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(stickArticle.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", stickArticleLink);
 
                         break;
@@ -519,14 +510,19 @@ public class PointtransferQueryService {
                             user9 = userRepository.get(toId);
                         }
 
-                        final String userLink = "<a href=\"/member/" + user9.optString(User.USER_NAME) + "\">"
-                                + user9.optString(User.USER_NAME) + "</a>";
+                        final String userLink = UserExt.getUserLink(user9);
                         desTemplate = desTemplate.replace("{user}", userLink);
+                        final String memo = record.optString(Pointtransfer.MEMO);
+                        if (StringUtils.isNotBlank(memo)) {
+                            desTemplate = desTemplate.replace("{memo}", memo);
+                        } else {
+                            desTemplate = desTemplate.replace("{memo}", langPropsService.get("noMemoLabel"));
+                        }
 
                         break;
                     case Pointtransfer.TRANSFER_TYPE_C_ACTIVITY_CHECKIN_STREAK:
-                        desTemplate = desTemplate.replace("{point}",
-                                String.valueOf(Pointtransfer.TRANSFER_SUM_C_ACTIVITY_CHECKINT_STREAK));
+                        desTemplate = desTemplate.replace("{point}", record.optString(Pointtransfer.SUM));
+
                         break;
                     case Pointtransfer.TRANSFER_TYPE_C_CHARGE:
                         final String yuan = dataId.split("-")[0];
@@ -553,7 +549,7 @@ public class PointtransferQueryService {
 
                         final String addArticleBroadcastLink = "<a href=\""
                                 + addArticleBroadcast.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + addArticleBroadcast.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(addArticleBroadcast.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", addArticleBroadcastLink);
 
                         break;
@@ -567,8 +563,37 @@ public class PointtransferQueryService {
 
                         final String perfectArticleLink = "<a href=\""
                                 + perfectArticle.optString(Article.ARTICLE_PERMALINK) + "\">"
-                                + perfectArticle.optString(Article.ARTICLE_TITLE) + "</a>";
+                                + Encode.forHtml(perfectArticle.optString(Article.ARTICLE_TITLE)) + "</a>";
                         desTemplate = desTemplate.replace("{article}", perfectArticleLink);
+
+                        break;
+                    case Pointtransfer.TRANSFER_TYPE_C_QNA_OFFER:
+                        final JSONObject reward34 = rewardRepository.get(dataId);
+                        JSONObject user34;
+                        if ("34In".equals(typeStr)) {
+                            user34 = userRepository.get(fromId);
+                        } else {
+                            user34 = userRepository.get(toId);
+                        }
+                        final String userLink34 = UserExt.getUserLink(user34);
+                        desTemplate = desTemplate.replace("{user}", userLink34);
+                        final String articleId34 = reward34.optString(Reward.DATA_ID);
+                        final JSONObject article34 = articleRepository.get(articleId34);
+                        if (null == article34) {
+                            desTemplate = langPropsService.get("removedLabel");
+
+                            break;
+                        }
+                        final String articleLink34 = "<a href=\""
+                                + article34.optString(Article.ARTICLE_PERMALINK) + "\">"
+                                + Encode.forHtml(article34.optString(Article.ARTICLE_TITLE)) + "</a>";
+                        desTemplate = desTemplate.replace("{article}", articleLink34);
+
+                        break;
+                    case Pointtransfer.TRANSFER_TYPE_C_CHANGE_USERNAME:
+                        final String oldName = dataId.split("-")[0];
+                        final String newName = dataId.split("-")[1];
+                        desTemplate = desTemplate.replace("{oldName}", oldName).replace("{newName}", newName);
 
                         break;
                     default:

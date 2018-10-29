@@ -1,26 +1,26 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
-import jodd.util.URLDecoder;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.Latkes;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.model.Pagination;
 import org.b3log.latke.servlet.HTTPRequestContext;
 import org.b3log.latke.servlet.HTTPRequestMethod;
@@ -28,22 +28,20 @@ import org.b3log.latke.servlet.annotation.After;
 import org.b3log.latke.servlet.annotation.Before;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
 import org.b3log.latke.util.Paginator;
-import org.b3log.latke.util.Strings;
-import org.b3log.symphony.cache.TagCache;
 import org.b3log.symphony.model.*;
 import org.b3log.symphony.processor.advice.AnonymousViewCheck;
 import org.b3log.symphony.processor.advice.PermissionGrant;
 import org.b3log.symphony.processor.advice.stopwatch.StopwatchEndAdvice;
 import org.b3log.symphony.processor.advice.stopwatch.StopwatchStartAdvice;
 import org.b3log.symphony.service.*;
-import org.b3log.symphony.util.Sessions;
 import org.b3log.symphony.util.Symphonys;
 import org.json.JSONObject;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +56,7 @@ import java.util.Map;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
- * @version 1.7.0.10, Jan 18, 2017
+ * @version 1.7.0.13, Jun 6, 2018
  * @since 0.2.0
  */
 @RequestProcessor
@@ -95,23 +93,15 @@ public class TagProcessor {
     private DataModelService dataModelService;
 
     /**
-     * Tag cache.
-     */
-    @Inject
-    private TagCache tagCache;
-
-    /**
      * Queries tags.
      *
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws Exception exception
      */
     @RequestProcessing(value = "/tags/query", method = HTTPRequestMethod.GET)
-    public void queryTags(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
-        if (null == Sessions.currentUser(request)) {
+    public void queryTags(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
+        if (null == request.getAttribute(Common.CURRENT_USER)) {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
 
             return;
@@ -122,7 +112,6 @@ public class TagProcessor {
         final String titlePrefix = request.getParameter("title");
 
         List<JSONObject> tags;
-
         final int fetchSize = 7;
         if (StringUtils.isBlank(titlePrefix)) {
             tags = tagQueryService.getTags(fetchSize);
@@ -139,31 +128,6 @@ public class TagProcessor {
     }
 
     /**
-     * Caches tags.
-     *
-     * @param request  the specified HTTP servlet request
-     * @param response the specified HTTP servlet response
-     * @param context  the specified HTTP request context
-     * @throws Exception exception
-     */
-    @RequestProcessing(value = "/cron/tag/cache-tags", method = HTTPRequestMethod.GET)
-    @Before(adviceClass = StopwatchStartAdvice.class)
-    @After(adviceClass = StopwatchEndAdvice.class)
-    public void cacheIconTags(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
-            throws Exception {
-        final String key = Symphonys.get("keyOfSymphony");
-        if (!key.equals(request.getParameter("key"))) {
-            response.sendError(HttpServletResponse.SC_FORBIDDEN);
-
-            return;
-        }
-
-        tagCache.loadTags();
-
-        context.renderJSON().renderTrueResult();
-    }
-
-    /**
      * Shows tags wall.
      *
      * @param context  the specified context
@@ -177,9 +141,7 @@ public class TagProcessor {
     public void showTagsWall(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
             throws Exception {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
-        ;
         context.setRenderer(renderer);
-
         renderer.setTemplateName("tags.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
 
@@ -209,24 +171,22 @@ public class TagProcessor {
                                 final String tagURI) throws Exception {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
-
         renderer.setTemplateName("tag-articles.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
-
-        String pageNumStr = request.getParameter("p");
-        if (Strings.isEmptyOrNull(pageNumStr) || !Strings.isNumeric(pageNumStr)) {
-            pageNumStr = "1";
-        }
-
-        final int pageNum = Integer.valueOf(pageNumStr);
+        final int pageNum = Paginator.getPage(request);
         int pageSize = Symphonys.getInt("indexArticlesCnt");
 
-        final JSONObject user = userQueryService.getCurrentUser(request);
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null != user) {
             pageSize = user.optInt(UserExt.USER_LIST_PAGE_SIZE);
+
+            if (!UserExt.finshedGuide(user)) {
+                response.sendRedirect(Latkes.getServePath() + "/guide");
+
+                return;
+            }
         }
-        final int windowSize = Symphonys.getInt("tagArticlesWindowSize");
 
         final JSONObject tag = tagQueryService.getTagByURI(tagURI);
         if (null == tag) {
@@ -238,10 +198,6 @@ public class TagProcessor {
         tag.put(Common.IS_RESERVED, tagQueryService.isReservedTag(tag.optString(Tag.TAG_TITLE)));
 
         dataModel.put(Tag.TAG, tag);
-
-        if ("book_share".equals(tagURI)) { // https://github.com/b3log/symphony/issues/376
-            dataModel.put(Common.SELECTED, Book.BOOK);
-        }
 
         final String tagId = tag.optString(Keys.OBJECT_ID);
 
@@ -294,13 +250,12 @@ public class TagProcessor {
 
         tag.put(Tag.TAG_T_CREATOR_THUMBNAIL_URL, tagCreator.optString(Tag.TAG_T_CREATOR_THUMBNAIL_URL));
         tag.put(Tag.TAG_T_CREATOR_NAME, tagCreator.optString(Tag.TAG_T_CREATOR_NAME));
-        tag.put(Tag.TAG_T_CREATOR_THUMBNAIL_UPDATE_TIME, tagCreator.optLong(Tag.TAG_T_CREATOR_THUMBNAIL_UPDATE_TIME));
         tag.put(Tag.TAG_T_PARTICIPANTS, (Object) tagQueryService.getParticipants(
                 avatarViewMode, tagId, Symphonys.getInt("tagParticipantsCnt")));
 
         final int tagRefCnt = tag.getInt(Tag.TAG_REFERENCE_CNT);
         final int pageCount = (int) Math.ceil(tagRefCnt / (double) pageSize);
-
+        final int windowSize = Symphonys.getInt("tagArticlesWindowSize");
         final List<Integer> pageNums = Paginator.paginate(pageNum, pageSize, pageCount, windowSize);
         if (!pageNums.isEmpty()) {
             dataModel.put(Pagination.PAGINATION_FIRST_PAGE_NUM, pageNums.get(0));
@@ -311,12 +266,12 @@ public class TagProcessor {
         dataModel.put(Pagination.PAGINATION_PAGE_COUNT, pageCount);
         dataModel.put(Pagination.PAGINATION_PAGE_NUMS, pageNums);
 
-        dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-        dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
         dataModelService.fillSideTags(dataModel);
         dataModelService.fillLatestCmts(dataModel);
 
-        dataModel.put(Common.CURRENT, StringUtils.substringAfter(URLDecoder.decode(request.getRequestURI()),
+        dataModel.put(Common.CURRENT, StringUtils.substringAfter(URLDecoder.decode(request.getRequestURI(), "UTF-8"),
                 "/tag/" + tagURI));
     }
 }

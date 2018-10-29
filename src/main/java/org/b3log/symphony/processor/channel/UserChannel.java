@@ -1,34 +1,31 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor.channel;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.LatkeBeanManagerImpl;
-import org.b3log.latke.logging.Level;
+import org.b3log.latke.ioc.BeanManager;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
-import org.b3log.latke.repository.Transaction;
 import org.b3log.latke.repository.jdbc.JdbcRepository;
 import org.b3log.symphony.model.Common;
 import org.b3log.symphony.model.UserExt;
-import org.b3log.symphony.repository.UserRepository;
+import org.b3log.symphony.service.UserMgmtService;
 import org.json.JSONObject;
 
 import javax.websocket.*;
@@ -42,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * User channel.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.1.0, Nov 3, 2016
+ * @version 1.0.1.2, Sep 3, 2018
  * @since 1.4.0
  */
 @ServerEndpoint(value = "/user-channel", configurator = Channels.WebSocketConfigurator.class)
@@ -80,13 +77,20 @@ public class UserChannel {
 
         SESSIONS.put(userId, userSessions);
 
-        updateUserOnlineFlag(userId, true);
+        final BeanManager beanManager = BeanManager.getInstance();
+        final UserMgmtService userMgmtService = beanManager.getReference(UserMgmtService.class);
+        final String ip = (String) Channels.getHttpSessionAttribute(session, Common.IP);
+        try {
+            userMgmtService.updateOnlineStatus(userId, ip, true, true);
+        } finally {
+            JdbcRepository.dispose();
+        }
     }
 
     /**
      * Called when the connection closed.
      *
-     * @param session session
+     * @param session     session
      * @param closeReason close reason
      */
     @OnClose
@@ -107,14 +111,22 @@ public class UserChannel {
             return;
         }
 
-        updateUserOnlineFlag(user.optString(Keys.OBJECT_ID), true);
+        final String userId = user.optString(Keys.OBJECT_ID);
+        final BeanManager beanManager = BeanManager.getInstance();
+        final UserMgmtService userMgmtService = beanManager.getReference(UserMgmtService.class);
+        final String ip = (String) Channels.getHttpSessionAttribute(session, Common.IP);
+        try {
+            userMgmtService.updateOnlineStatus(userId, ip, true, true);
+        } finally {
+            JdbcRepository.dispose();
+        }
     }
 
     /**
      * Called in case of an error.
      *
      * @param session session
-     * @param error error
+     * @param error   error
      */
     @OnError
     public void onError(final Session session, final Throwable error) {
@@ -124,15 +136,12 @@ public class UserChannel {
     /**
      * Sends command to browsers.
      *
-     * @param message the specified message, for example      <pre>
-     * {
-     *     "userId": "",
-     *     "cmd": ""
-     * }
-     * </pre>
+     * @param message the specified message, for example,
+     *                "userId": "",
+     *                "cmd": ""
      */
     public static void sendCmd(final JSONObject message) {
-        final String recvUserId = message.optString(Common.USER_ID);
+        final String recvUserId = message.optString(UserExt.USER_T_ID);
         if (StringUtils.isBlank(recvUserId)) {
             return;
         }
@@ -164,43 +173,30 @@ public class UserChannel {
         }
 
         final String userId = user.optString(Keys.OBJECT_ID);
+        final BeanManager beanManager = BeanManager.getInstance();
+        final UserMgmtService userMgmtService = beanManager.getReference(UserMgmtService.class);
+        final String ip = (String) Channels.getHttpSessionAttribute(session, Common.IP);
 
         Set<Session> userSessions = SESSIONS.get(userId);
         if (null == userSessions) {
-            updateUserOnlineFlag(userId, false);
+            try {
+                userMgmtService.updateOnlineStatus(userId, ip, false, false);
+            } finally {
+                JdbcRepository.dispose();
+            }
 
             return;
         }
 
         userSessions.remove(session);
         if (userSessions.isEmpty()) {
-            updateUserOnlineFlag(userId, false);
-
-            return;
-        }
-    }
-
-    private void updateUserOnlineFlag(final String userId, final boolean online) {
-        final LatkeBeanManager beanManager = LatkeBeanManagerImpl.getInstance();
-        final UserRepository userRepository = beanManager.getReference(UserRepository.class);
-
-        final Transaction transaction = userRepository.beginTransaction();
-        try {
-            final JSONObject user = userRepository.get(userId);
-            user.put(UserExt.USER_ONLINE_FLAG, online);
-            user.put(UserExt.USER_LATEST_LOGIN_TIME, System.currentTimeMillis());
-
-            userRepository.update(userId, user);
-
-            transaction.commit();
-        } catch (final Exception e) {
-            if (transaction.isActive()) {
-                transaction.rollback();
+            try {
+                userMgmtService.updateOnlineStatus(userId, ip, false, false);
+            } finally {
+                JdbcRepository.dispose();
             }
 
-            LOGGER.log(Level.ERROR, "Update user error", e);
-        } finally {
-            JdbcRepository.dispose();
+            return;
         }
     }
 }

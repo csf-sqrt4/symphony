@@ -1,26 +1,26 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 /**
  * Mobile base style.
  *
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.8.0.1, Aug 22, 2017
+ * @version 1.10.0.1, Aug 20, 2018
  */
 @import "variables";
 @import "common";
@@ -129,6 +129,12 @@ button.small,
   text-shadow: initial;
 }
 
+button.absolute {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+
 /* end button */
 
 /* start icon */
@@ -166,7 +172,6 @@ a[class*=" icon-"]:hover {
 #loginTip,
 #addArticleTip,
 #profilesTip,
-#syncb3Tip,
 #passwordTip {
   white-space: normal;
   word-wrap: break-word;
@@ -634,6 +639,11 @@ a[class*=" icon-"]:hover {
   margin: 0;
 }
 
+.list > ul > li.cmt-perfect,
+.list > ul > li.cmt-perfect:hover {
+  background-color: #f9f6f6;
+}
+
 .has-view {
   margin-right: 40px;
 }
@@ -717,12 +727,29 @@ ul.CodeMirror-hints {
 .CodeMirror pre.CodeMirror-placeholder {
   color: #999;
 }
+#revision .revisions {
+  margin: 5px 0 15px;
+  text-align: center;
+  a {
+    color: $black-light;
+    vertical-align: middle;
+    &:hover {
+      color: $black-text;
+    }
+    &.disabled {
+      color: $fade;
+      cursor: default;
+    }
+  }
+  span {
+    margin: 0 10px 0 10px;
+  }
+}
 
 /* end article */
 
 /* start side module */
 .module {
-  border: 1px solid #eee;
   margin-bottom: 10px;
   background-color: #FFF;
   border-radius: 3px;
@@ -1370,13 +1397,13 @@ label.cmt-anonymous {
 .domains a {
   height: 17px;
   text-align: center;
-  padding: 10px 5px;
+  padding: 10px 2px;
   color: #999;
   text-decoration: none;
-  font-size: 12px;
   line-height: 16px;
   display: block;
   flex: 1;
+  font-size: 12px;
 }
 
 .domains a.selected {
@@ -1903,7 +1930,9 @@ code .dec {
 
 /* start chat room */
 .chat-room .online-cnt {
-  margin-top: 11px;
+  line-height: 33px;
+  margin-right: 10px;
+  color: $gray;
 }
 
 .chat-room .list {
@@ -2214,11 +2243,29 @@ code .dec {
   padding-bottom: 10px;
 }
 
+
+.home-account {
+  &__captch {
+    position: relative;
+    img {
+      position: absolute;
+      height: 31px;
+      top: 39px;
+      right: 1px;
+      border-radius: 0 3px 3px 0;
+    }
+  }
+}
 /* end home */
 
 /* start notifications */
-.notification-tab a:hover {
-  text-decoration: none;
+.notification-tab {
+  a:hover {
+    text-decoration: none;
+  }
+  a {
+    display: inline-block !important;
+  }
 }
 
 .notification .read {
@@ -2328,13 +2375,6 @@ code .dec {
   overflow: hidden;
 }
 
-.settings-secret label {
-  display: block;
-  width: 100%;
-  margin: 5px 0;
-  float: none;
-}
-
 .settings-avatar .btn {
   margin-top: 0;
 }
@@ -2427,3 +2467,7 @@ code .dec {
 }
 
 /* end other */
+#breezemoonList button.absolute {
+  right: 0;
+  top: 0;
+}

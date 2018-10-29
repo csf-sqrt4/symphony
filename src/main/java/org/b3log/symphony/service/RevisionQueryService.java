@@ -1,24 +1,24 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.*;
@@ -32,6 +32,7 @@ import org.b3log.symphony.repository.RevisionRepository;
 import org.b3log.symphony.util.Markdowns;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.owasp.encoder.Encode;
 
 import java.util.Collections;
 import java.util.List;
@@ -40,7 +41,7 @@ import java.util.List;
  * Revision query service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.1, May 12, 2017
+ * @version 1.0.1.0, Nov 14, 2017
  * @since 2.1.0
  */
 @Service
@@ -106,9 +107,7 @@ public class RevisionQueryService {
             final List<JSONObject> ret = CollectionUtils.jsonArrayToList(revisionRepository.get(query).optJSONArray(Keys.RESULTS));
             for (final JSONObject rev : ret) {
                 final JSONObject data = new JSONObject(rev.optString(Revision.REVISION_DATA));
-                String articleTitle = data.optString(Article.ARTICLE_TITLE);
-                articleTitle = articleTitle.replace("<", "&lt;").replace(">", "&gt;");
-                articleTitle = Markdowns.clean(articleTitle, "");
+                final String articleTitle = Encode.forHtml(data.optString(Article.ARTICLE_TITLE));
                 data.put(Article.ARTICLE_TITLE, articleTitle);
 
                 String articleContent = data.optString(Article.ARTICLE_CONTENT);

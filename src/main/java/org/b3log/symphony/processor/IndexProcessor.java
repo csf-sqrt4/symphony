@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
@@ -21,7 +21,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -32,10 +32,10 @@ import org.b3log.latke.servlet.annotation.After;
 import org.b3log.latke.servlet.annotation.Before;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
 import org.b3log.latke.util.Locales;
+import org.b3log.latke.util.Paginator;
 import org.b3log.latke.util.Stopwatchs;
-import org.b3log.latke.util.Strings;
 import org.b3log.symphony.model.Article;
 import org.b3log.symphony.model.Common;
 import org.b3log.symphony.model.UserExt;
@@ -43,7 +43,10 @@ import org.b3log.symphony.processor.advice.AnonymousViewCheck;
 import org.b3log.symphony.processor.advice.PermissionGrant;
 import org.b3log.symphony.processor.advice.stopwatch.StopwatchEndAdvice;
 import org.b3log.symphony.processor.advice.stopwatch.StopwatchStartAdvice;
-import org.b3log.symphony.service.*;
+import org.b3log.symphony.service.ArticleQueryService;
+import org.b3log.symphony.service.DataModelService;
+import org.b3log.symphony.service.UserMgmtService;
+import org.b3log.symphony.service.UserQueryService;
 import org.b3log.symphony.util.Emotions;
 import org.b3log.symphony.util.Markdowns;
 import org.b3log.symphony.util.Symphonys;
@@ -58,18 +61,19 @@ import java.util.*;
  * Index processor.
  * <ul>
  * <li>Shows index (/), GET</li>
- * <li>Shows recent articles (/recent), GET</li>
- * <li>Shows hot articles (/hot), GET</li>
- * <li>Shows perfect articles (/perfect), GET</li>
+ * <li>Show recent articles (/recent), GET</li>
+ * <li>Show question articles (/qna), GET</li>
+ * <li>Show watch relevant pages (/watch/*), GET</li>
+ * <li>Show hot articles (/hot), GET</li>
+ * <li>Show perfect articles (/perfect), GET</li>
  * <li>Shows about (/about), GET</li>
  * <li>Shows b3log (/b3log), GET</li>
- * <li>Shows SymHub (/symhub), GET</li>
  * <li>Shows kill browser (/kill-browser), GET</li>
  * </ul>
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
- * @version 1.12.3.24, Dec 26, 2016
+ * @version 1.15.0.1, Sep 14, 2018
  * @since 0.2.0
  */
 @RequestProcessor
@@ -111,30 +115,164 @@ public class IndexProcessor {
     private LangPropsService langPropsService;
 
     /**
-     * Timeline management service.
+     * Shows question articles.
+     *
+     * @param context  the specified context
+     * @param request  the specified request
+     * @param response the specified response
+     * @throws Exception exception
      */
-    @Inject
-    private TimelineMgmtService timelineMgmtService;
+    @RequestProcessing(value = {"/qna", "/qna/unanswered", "/qna/reward", "/qna/hot"}, method = HTTPRequestMethod.GET)
+    @Before(adviceClass = {StopwatchStartAdvice.class, AnonymousViewCheck.class})
+    @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
+    public void showQnA(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
+            throws Exception {
+        final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
+        context.setRenderer(renderer);
+        renderer.setTemplateName("qna.ftl");
+        final Map<String, Object> dataModel = renderer.getDataModel();
+
+        final int pageNum = Paginator.getPage(request);
+        int pageSize = Symphonys.getInt("indexArticlesCnt");
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
+        if (null != user) {
+            pageSize = user.optInt(UserExt.USER_LIST_PAGE_SIZE);
+
+            if (!UserExt.finshedGuide(user)) {
+                response.sendRedirect(Latkes.getServePath() + "/guide");
+
+                return;
+            }
+        }
+
+        final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
+
+        String sortModeStr = StringUtils.substringAfter(request.getRequestURI(), "/qna");
+        int sortMode;
+        switch (sortModeStr) {
+            case "":
+                sortMode = 0;
+
+                break;
+            case "/unanswered":
+                sortMode = 1;
+
+                break;
+            case "/reward":
+                sortMode = 2;
+
+                break;
+            case "/hot":
+                sortMode = 3;
+
+                break;
+            default:
+                sortMode = 0;
+        }
+
+        dataModel.put(Common.SELECTED, Common.QNA);
+        final JSONObject result = articleQueryService.getQuestionArticles(avatarViewMode, sortMode, pageNum, pageSize);
+        final List<JSONObject> allArticles = (List<JSONObject>) result.get(Article.ARTICLES);
+        dataModel.put(Common.LATEST_ARTICLES, allArticles);
+
+        final JSONObject pagination = result.getJSONObject(Pagination.PAGINATION);
+        final int pageCount = pagination.optInt(Pagination.PAGINATION_PAGE_COUNT);
+        final List<Integer> pageNums = (List<Integer>) pagination.get(Pagination.PAGINATION_PAGE_NUMS);
+        if (!pageNums.isEmpty()) {
+            dataModel.put(Pagination.PAGINATION_FIRST_PAGE_NUM, pageNums.get(0));
+            dataModel.put(Pagination.PAGINATION_LAST_PAGE_NUM, pageNums.get(pageNums.size() - 1));
+        }
+
+        dataModel.put(Pagination.PAGINATION_CURRENT_PAGE_NUM, pageNum);
+        dataModel.put(Pagination.PAGINATION_PAGE_COUNT, pageCount);
+        dataModel.put(Pagination.PAGINATION_PAGE_NUMS, pageNums);
+
+        dataModelService.fillHeaderAndFooter(request, response, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
+        dataModelService.fillSideTags(dataModel);
+        dataModelService.fillLatestCmts(dataModel);
+
+        dataModel.put(Common.CURRENT, StringUtils.substringAfter(request.getRequestURI(), "/qna"));
+    }
+
+    /**
+     * Shows watch articles or users.
+     *
+     * @param context  the specified context
+     * @param request  the specified request
+     * @param response the specified response
+     * @throws Exception exception
+     */
+    @RequestProcessing(value = {"/watch", "/watch/users"}, method = HTTPRequestMethod.GET)
+    @Before(adviceClass = {StopwatchStartAdvice.class, AnonymousViewCheck.class})
+    @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
+    public void showWatch(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
+            throws Exception {
+        final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
+        context.setRenderer(renderer);
+        renderer.setTemplateName("watch.ftl");
+        final Map<String, Object> dataModel = renderer.getDataModel();
+
+        int pageSize = Symphonys.getInt("indexArticlesCnt");
+        final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
+        if (null != user) {
+            pageSize = user.optInt(UserExt.USER_LIST_PAGE_SIZE);
+
+            if (!UserExt.finshedGuide(user)) {
+                response.sendRedirect(Latkes.getServePath() + "/guide");
+
+                return;
+            }
+        }
+
+        dataModel.put(Common.WATCHING_ARTICLES, Collections.emptyList());
+        String sortModeStr = StringUtils.substringAfter(request.getRequestURI(), "/watch");
+        switch (sortModeStr) {
+            case "":
+                if (null != user) {
+                    final List<JSONObject> followingTagArticles = articleQueryService.getFollowingTagArticles(
+                            avatarViewMode, user.optString(Keys.OBJECT_ID), 1, pageSize);
+                    dataModel.put(Common.WATCHING_ARTICLES, followingTagArticles);
+                }
+
+                break;
+            case "/users":
+                if (null != user) {
+                    final List<JSONObject> followingUserArticles = articleQueryService.getFollowingUserArticles(
+                            avatarViewMode, user.optString(Keys.OBJECT_ID), 1, pageSize);
+                    dataModel.put(Common.WATCHING_ARTICLES, followingUserArticles);
+                }
+
+                break;
+        }
+
+        dataModelService.fillHeaderAndFooter(request, response, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
+        dataModelService.fillSideTags(dataModel);
+        dataModelService.fillLatestCmts(dataModel);
+
+        dataModel.put(Common.SELECTED, Common.WATCH);
+        dataModel.put(Common.CURRENT, StringUtils.substringAfter(request.getRequestURI(), "/watch"));
+    }
 
     /**
      * Shows md guide.
      *
      * @param response the specified response
-     * @throws Exception exception
      */
     @RequestProcessing(value = "/guide/markdown", method = HTTPRequestMethod.GET)
     @Before(adviceClass = {StopwatchStartAdvice.class})
     @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
-    public void showMDGuide(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
+    public void showMDGuide(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
         renderer.setTemplateName("other/md-guide.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
 
-        InputStream inputStream = null;
-        try {
-            inputStream = IndexProcessor.class.getResourceAsStream("/md_guide.md");
+        try (final InputStream inputStream = IndexProcessor.class.getResourceAsStream("/md_guide.md")) {
             final String md = IOUtils.toString(inputStream, "UTF-8");
             String html = Emotions.convert(md);
             html = Markdowns.toHTML(html);
@@ -143,8 +281,6 @@ public class IndexProcessor {
             dataModel.put("html", html);
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Loads markdown guide failed", e);
-        } finally {
-            IOUtils.closeQuietly(inputStream);
         }
 
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
@@ -169,50 +305,16 @@ public class IndexProcessor {
         final Map<String, Object> dataModel = renderer.getDataModel();
 
         final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
-
         final List<JSONObject> recentArticles = articleQueryService.getIndexRecentArticles(avatarViewMode);
         dataModel.put(Common.RECENT_ARTICLES, recentArticles);
 
-        JSONObject currentUser = userQueryService.getCurrentUser(request);
-        if (null == currentUser) {
-            userMgmtService.tryLogInWithCookie(request, context.getResponse());
-        }
-
-        currentUser = userQueryService.getCurrentUser(request);
-
-        if (null != currentUser) {
-            if (!UserExt.finshedGuide(currentUser)) {
-                response.sendRedirect(Latkes.getServePath() + "/guide");
-
-                return;
-            }
-
-            final String userId = currentUser.optString(Keys.OBJECT_ID);
-
-            final int pageSize = Symphonys.getInt("indexArticlesCnt");
-
-            final List<JSONObject> followingTagArticles = articleQueryService.getFollowingTagArticles(
-                    avatarViewMode, userId, 1, pageSize);
-            dataModel.put(Common.FOLLOWING_TAG_ARTICLES, followingTagArticles);
-
-            final List<JSONObject> followingUserArticles = articleQueryService.getFollowingUserArticles(
-                    avatarViewMode, userId, 1, pageSize);
-            dataModel.put(Common.FOLLOWING_USER_ARTICLES, followingUserArticles);
-        } else {
-            dataModel.put(Common.FOLLOWING_TAG_ARTICLES, Collections.emptyList());
-            dataModel.put(Common.FOLLOWING_USER_ARTICLES, Collections.emptyList());
-        }
-
-        final List<JSONObject> perfectArticles = articleQueryService.getIndexPerfectArticles(avatarViewMode);
+        final List<JSONObject> perfectArticles = articleQueryService.getIndexPerfectArticles();
         dataModel.put(Common.PERFECT_ARTICLES, perfectArticles);
-
-        final List<JSONObject> timelines = timelineMgmtService.getTimelines();
-        dataModel.put(Common.TIMELINES, timelines);
-
-        dataModel.put(Common.SELECTED, Common.INDEX);
 
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
         dataModelService.fillIndexTags(dataModel);
+
+        dataModel.put(Common.SELECTED, Common.INDEX);
     }
 
     /**
@@ -232,15 +334,9 @@ public class IndexProcessor {
         context.setRenderer(renderer);
         renderer.setTemplateName("recent.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
-
-        String pageNumStr = request.getParameter("p");
-        if (Strings.isEmptyOrNull(pageNumStr) || !Strings.isNumeric(pageNumStr)) {
-            pageNumStr = "1";
-        }
-
-        final int pageNum = Integer.valueOf(pageNumStr);
+        final int pageNum = Paginator.getPage(request);
         int pageSize = Symphonys.getInt("indexArticlesCnt");
-        final JSONObject user = userQueryService.getCurrentUser(request);
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null != user) {
             pageSize = user.optInt(UserExt.USER_LIST_PAGE_SIZE);
 
@@ -276,20 +372,15 @@ public class IndexProcessor {
                 sortMode = 0;
         }
 
+        dataModel.put(Common.SELECTED, Common.RECENT);
         final JSONObject result = articleQueryService.getRecentArticles(avatarViewMode, sortMode, pageNum, pageSize);
         final List<JSONObject> allArticles = (List<JSONObject>) result.get(Article.ARTICLES);
-
-        dataModel.put(Common.SELECTED, Common.RECENT);
-
         final List<JSONObject> stickArticles = new ArrayList<>();
-
         final Iterator<JSONObject> iterator = allArticles.iterator();
         while (iterator.hasNext()) {
             final JSONObject article = iterator.next();
-
             final boolean stick = article.optInt(Article.ARTICLE_T_STICK_REMAINS) > 0;
             article.put(Article.ARTICLE_T_IS_STICK, stick);
-
             if (stick) {
                 stickArticles.add(article);
                 iterator.remove();
@@ -301,7 +392,6 @@ public class IndexProcessor {
 
         final JSONObject pagination = result.getJSONObject(Pagination.PAGINATION);
         final int pageCount = pagination.optInt(Pagination.PAGINATION_PAGE_COUNT);
-
         final List<Integer> pageNums = (List<Integer>) pagination.get(Pagination.PAGINATION_PAGE_NUMS);
         if (!pageNums.isEmpty()) {
             dataModel.put(Pagination.PAGINATION_FIRST_PAGE_NUM, pageNums.get(0));
@@ -313,9 +403,8 @@ public class IndexProcessor {
         dataModel.put(Pagination.PAGINATION_PAGE_NUMS, pageNums);
 
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
-
-        dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-        dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
         dataModelService.fillSideTags(dataModel);
         dataModelService.fillLatestCmts(dataModel);
 
@@ -341,63 +430,23 @@ public class IndexProcessor {
         final Map<String, Object> dataModel = renderer.getDataModel();
 
         int pageSize = Symphonys.getInt("indexArticlesCnt");
-
-        final JSONObject user = userQueryService.getCurrentUser(request);
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null != user) {
             pageSize = user.optInt(UserExt.USER_LIST_PAGE_SIZE);
         }
 
         final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
-
         final List<JSONObject> indexArticles = articleQueryService.getHotArticles(avatarViewMode, pageSize);
         dataModel.put(Common.INDEX_ARTICLES, indexArticles);
-
         dataModel.put(Common.SELECTED, Common.HOT);
 
         Stopwatchs.start("Fills");
         try {
             dataModelService.fillHeaderAndFooter(request, response, dataModel);
             if (!(Boolean) dataModel.get(Common.IS_MOBILE)) {
-                dataModelService.fillRandomArticles(avatarViewMode, dataModel);
+                dataModelService.fillRandomArticles(dataModel);
             }
-            dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
-            dataModelService.fillSideTags(dataModel);
-            dataModelService.fillLatestCmts(dataModel);
-        } finally {
-            Stopwatchs.end();
-        }
-    }
-
-    /**
-     * Shows SymHub page.
-     *
-     * @param context  the specified context
-     * @param request  the specified request
-     * @param response the specified response
-     * @throws Exception exception
-     */
-    @RequestProcessing(value = "/symhub", method = HTTPRequestMethod.GET)
-    @Before(adviceClass = {StopwatchStartAdvice.class, AnonymousViewCheck.class})
-    @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
-    public void showSymHub(final HTTPRequestContext context,
-                           final HttpServletRequest request, final HttpServletResponse response) throws Exception {
-        final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
-        context.setRenderer(renderer);
-        renderer.setTemplateName("other/symhub.ftl");
-        final Map<String, Object> dataModel = renderer.getDataModel();
-
-        final List<JSONObject> syms = Symphonys.getSyms();
-        dataModel.put("syms", (Object) syms);
-
-        Stopwatchs.start("Fills");
-        try {
-            final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
-
-            dataModelService.fillHeaderAndFooter(request, response, dataModel);
-            if (!(Boolean) dataModel.get(Common.IS_MOBILE)) {
-                dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-            }
-            dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+            dataModelService.fillSideHotArticles(dataModel);
             dataModelService.fillSideTags(dataModel);
             dataModelService.fillLatestCmts(dataModel);
         } finally {
@@ -422,18 +471,11 @@ public class IndexProcessor {
         context.setRenderer(renderer);
         renderer.setTemplateName("perfect.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
-
-        String pageNumStr = request.getParameter("p");
-        if (Strings.isEmptyOrNull(pageNumStr) || !Strings.isNumeric(pageNumStr)) {
-            pageNumStr = "1";
-        }
-
-        final int pageNum = Integer.valueOf(pageNumStr);
+        final int pageNum = Paginator.getPage(request);
         int pageSize = Symphonys.getInt("indexArticlesCnt");
-        final JSONObject user = userQueryService.getCurrentUser(request);
+        final JSONObject user = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         if (null != user) {
             pageSize = user.optInt(UserExt.USER_LIST_PAGE_SIZE);
-
             if (!UserExt.finshedGuide(user)) {
                 response.sendRedirect(Latkes.getServePath() + "/guide");
 
@@ -442,16 +484,12 @@ public class IndexProcessor {
         }
 
         final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
-
         final JSONObject result = articleQueryService.getPerfectArticles(avatarViewMode, pageNum, pageSize);
         final List<JSONObject> perfectArticles = (List<JSONObject>) result.get(Article.ARTICLES);
         dataModel.put(Common.PERFECT_ARTICLES, perfectArticles);
-
         dataModel.put(Common.SELECTED, Common.PERFECT);
-
         final JSONObject pagination = result.getJSONObject(Pagination.PAGINATION);
         final int pageCount = pagination.optInt(Pagination.PAGINATION_PAGE_COUNT);
-
         final List<Integer> pageNums = (List<Integer>) pagination.get(Pagination.PAGINATION_PAGE_NUMS);
         if (!pageNums.isEmpty()) {
             dataModel.put(Pagination.PAGINATION_FIRST_PAGE_NUM, pageNums.get(0));
@@ -463,8 +501,8 @@ public class IndexProcessor {
         dataModel.put(Pagination.PAGINATION_PAGE_NUMS, pageNums);
 
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
-        dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-        dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
         dataModelService.fillSideTags(dataModel);
         dataModelService.fillLatestCmts(dataModel);
     }
@@ -490,24 +528,20 @@ public class IndexProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws Exception exception
      */
     @RequestProcessing(value = "/b3log", method = HTTPRequestMethod.GET)
     @Before(adviceClass = StopwatchStartAdvice.class)
     @After(adviceClass = {PermissionGrant.class, StopwatchEndAdvice.class})
     public void showB3log(final HTTPRequestContext context,
-                          final HttpServletRequest request, final HttpServletResponse response) throws Exception {
+                          final HttpServletRequest request, final HttpServletResponse response) {
         final AbstractFreeMarkerRenderer renderer = new SkinRenderer(request);
         context.setRenderer(renderer);
         renderer.setTemplateName("other/b3log.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
 
         dataModelService.fillHeaderAndFooter(request, response, dataModel);
-
-        final int avatarViewMode = (int) request.getAttribute(UserExt.USER_AVATAR_VIEW_MODE);
-
-        dataModelService.fillRandomArticles(avatarViewMode, dataModel);
-        dataModelService.fillSideHotArticles(avatarViewMode, dataModel);
+        dataModelService.fillRandomArticles(dataModel);
+        dataModelService.fillSideHotArticles(dataModel);
         dataModelService.fillSideTags(dataModel);
         dataModelService.fillLatestCmts(dataModel);
     }
@@ -528,7 +562,6 @@ public class IndexProcessor {
         context.setRenderer(renderer);
 
         final Map<String, Object> dataModel = renderer.getDataModel();
-
         final Map<String, String> langs = langPropsService.getAll(Locales.getLocale());
 
         dataModel.putAll(langs);

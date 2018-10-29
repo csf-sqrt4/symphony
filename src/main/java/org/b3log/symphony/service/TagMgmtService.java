@@ -1,24 +1,24 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
@@ -29,6 +29,7 @@ import org.b3log.latke.repository.annotation.Transactional;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
+import org.b3log.latke.util.URLs;
 import org.b3log.symphony.cache.DomainCache;
 import org.b3log.symphony.cache.TagCache;
 import org.b3log.symphony.model.Common;
@@ -39,8 +40,6 @@ import org.b3log.symphony.repository.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -96,12 +95,6 @@ public class TagMgmtService {
     private DomainTagRepository domainTagRepository;
 
     /**
-     * Tag-User-Link repository.
-     */
-    @Inject
-    private TagUserLinkRepository tagUserLinkRepository;
-
-    /**
      * Language service.
      */
     @Inject
@@ -137,8 +130,7 @@ public class TagMgmtService {
                 if (0 == tag.optInt(Tag.TAG_REFERENCE_CNT) // article ref cnt
                         && 0 == domainTagRepository.getByTagId(tagId, 1, Integer.MAX_VALUE)
                         .optJSONArray(Keys.RESULTS).length() // domainTagRefCnt
-                        && 0 == tagUserLinkRepository.countTagLink(tagId) // tagUserLinkRefCnt
-                        ) {
+                ) {
                     final JSONArray userTagRels = userTagRepository.getByTagId(tagId, 1, Integer.MAX_VALUE)
                             .optJSONArray(Keys.RESULTS);
                     if (1 == userTagRels.length()
@@ -189,11 +181,7 @@ public class TagMgmtService {
             JSONObject tag = new JSONObject();
             tag.put(Tag.TAG_TITLE, tagTitle);
             String tagURI = tagTitle;
-            try {
-                tagURI = URLEncoder.encode(tagTitle, "UTF-8");
-            } catch (final UnsupportedEncodingException e) {
-                LOGGER.log(Level.ERROR, "Encode tag title [" + tagTitle + "] error", e);
-            }
+            tagURI = URLs.encode(tagTitle);
             tag.put(Tag.TAG_URI, tagURI);
             tag.put(Tag.TAG_CSS, "");
             tag.put(Tag.TAG_REFERENCE_CNT, 0);
@@ -209,6 +197,8 @@ public class TagMgmtService {
             tag.put(Tag.TAG_SEO_KEYWORDS, tagTitle);
             tag.put(Tag.TAG_SEO_DESC, "");
             tag.put(Tag.TAG_RANDOM_DOUBLE, Math.random());
+            tag.put(Tag.TAG_AD, "");
+            tag.put(Tag.TAG_SHOW_SIDE_AD, 0);
 
             ret = tagRepository.add(tag);
             tag.put(Keys.OBJECT_ID, ret);

@@ -1,31 +1,29 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.event;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.time.DateFormatUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.Latkes;
 import org.b3log.latke.event.AbstractEventListener;
 import org.b3log.latke.event.Event;
-import org.b3log.latke.event.EventException;
-import org.b3log.latke.ioc.inject.Inject;
-import org.b3log.latke.ioc.inject.Named;
-import org.b3log.latke.ioc.inject.Singleton;
+import org.b3log.latke.ioc.Inject;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -33,19 +31,13 @@ import org.b3log.latke.model.User;
 import org.b3log.latke.repository.*;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.symphony.model.*;
-import org.b3log.symphony.processor.advice.validate.UserRegisterValidation;
 import org.b3log.symphony.processor.channel.ArticleChannel;
 import org.b3log.symphony.processor.channel.ArticleListChannel;
 import org.b3log.symphony.repository.CommentRepository;
 import org.b3log.symphony.repository.UserRepository;
 import org.b3log.symphony.service.*;
-import org.b3log.symphony.util.Emotions;
-import org.b3log.symphony.util.JSONs;
-import org.b3log.symphony.util.Markdowns;
-import org.b3log.symphony.util.Symphonys;
+import org.b3log.symphony.util.*;
 import org.json.JSONObject;
-import org.jsoup.Jsoup;
-import org.jsoup.safety.Whitelist;
 
 import java.util.HashSet;
 import java.util.List;
@@ -55,10 +47,9 @@ import java.util.Set;
  * Sends a comment notification.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.7.11.23, Aug 23, 2017
+ * @version 1.7.12.4, Jul 31, 2018
  * @since 0.2.0
  */
-@Named
 @Singleton
 public class CommentNotifier extends AbstractEventListener<JSONObject> {
 
@@ -116,12 +107,6 @@ public class CommentNotifier extends AbstractEventListener<JSONObject> {
     private LangPropsService langPropsService;
 
     /**
-     * Timeline management service.
-     */
-    @Inject
-    private TimelineMgmtService timelineMgmtService;
-
-    /**
      * Pointtransfer management service.
      */
     @Inject
@@ -146,14 +131,13 @@ public class CommentNotifier extends AbstractEventListener<JSONObject> {
     private RoleQueryService roleQueryService;
 
     @Override
-    public void action(final Event<JSONObject> event) throws EventException {
+    public void action(final Event<JSONObject> event) {
         final JSONObject data = event.getData();
         LOGGER.log(Level.TRACE, "Processing an event [type={0}, data={1}]", event.getType(), data);
 
         try {
             final JSONObject originalArticle = data.getJSONObject(Article.ARTICLE);
             final JSONObject originalComment = data.getJSONObject(Comment.COMMENT);
-            final boolean fromClient = data.optBoolean(Common.FROM_CLIENT);
             final int commentViewMode = data.optInt(UserExt.USER_COMMENT_VIEW_MODE);
 
             final String articleId = originalArticle.optString(Keys.OBJECT_ID);
@@ -170,6 +154,7 @@ public class CommentNotifier extends AbstractEventListener<JSONObject> {
             chData.put(Comment.COMMENT_T_COMMENTER, commenter);
             chData.put(Keys.OBJECT_ID, commentId);
             chData.put(Article.ARTICLE_T_ID, articleId);
+            chData.put(Article.ARTICLE, originalArticle);
             chData.put(Comment.COMMENT_T_ID, commentId);
             chData.put(Comment.COMMENT_ORIGINAL_COMMENT_ID, originalCmtId);
 
@@ -222,35 +207,23 @@ public class CommentNotifier extends AbstractEventListener<JSONObject> {
                 chData.put(Comment.COMMENT_T_AUTHOR_THUMBNAIL_URL, avatarQueryService.getDefaultAvatarURL("48"));
             }
 
-            chData.put(Common.THUMBNAIL_UPDATE_TIME, commenter.optLong(UserExt.USER_UPDATE_TIME));
             chData.put(Common.TIME_AGO, langPropsService.get("justNowLabel"));
+            chData.put(Comment.COMMENT_CREATE_TIME_STR, DateFormatUtils.format(chData.optLong(Comment.COMMENT_CREATE_TIME), "yyyy-MM-dd HH:mm:ss"));
             String thankTemplate = langPropsService.get("thankConfirmLabel");
             thankTemplate = thankTemplate.replace("{point}", String.valueOf(Symphonys.getInt("pointThankComment")))
                     .replace("{user}", commenterName);
             chData.put(Comment.COMMENT_T_THANK_LABEL, thankTemplate);
             String cc = shortLinkQueryService.linkArticle(commentContent);
             cc = shortLinkQueryService.linkTag(cc);
+            cc = Emotions.toAliases(cc);
             cc = Emotions.convert(cc);
             cc = Markdowns.toHTML(cc);
             cc = Markdowns.clean(cc, "");
-
-            if (fromClient) {
-                // "<i class='ft-small'>by 88250</i>"
-                String syncCommenterName = StringUtils.substringAfter(cc, "<i class=\"ft-small\">by ");
-                syncCommenterName = StringUtils.substringBefore(syncCommenterName, "</i>");
-
-                if (UserRegisterValidation.invalidUserName(syncCommenterName)) {
-                    syncCommenterName = UserExt.ANONYMOUS_USER_NAME;
-                }
-
-                cc = cc.replaceAll("<i class=\"ft-small\">by .*</i>", "");
-
-                chData.put(Comment.COMMENT_T_AUTHOR_NAME, syncCommenterName);
-            }
+            cc = MP3Players.render(cc);
+            cc = VideoPlayers.render(cc);
 
             chData.put(Comment.COMMENT_CONTENT, cc);
             chData.put(Comment.COMMENT_UA, originalComment.optString(Comment.COMMENT_UA));
-            chData.put(Common.FROM_CLIENT, fromClient);
 
             ArticleChannel.notifyComment(chData);
 
@@ -263,46 +236,6 @@ public class CommentNotifier extends AbstractEventListener<JSONObject> {
             ArticleChannel.notifyHeat(articleHeat);
 
             final boolean isDiscussion = originalArticle.optInt(Article.ARTICLE_TYPE) == Article.ARTICLE_TYPE_C_DISCUSSION;
-
-            // Timeline
-            if (!isDiscussion
-                    && Comment.COMMENT_ANONYMOUS_C_PUBLIC == originalComment.optInt(Comment.COMMENT_ANONYMOUS)) {
-                String articleTitle = Jsoup.parse(originalArticle.optString(Article.ARTICLE_TITLE)).text();
-                articleTitle = Emotions.convert(articleTitle);
-                final String articlePermalink = Latkes.getServePath() + originalArticle.optString(Article.ARTICLE_PERMALINK);
-
-                final JSONObject timeline = new JSONObject();
-                timeline.put(Common.USER_ID, commenterId);
-                timeline.put(Common.TYPE, Comment.COMMENT);
-                String content = langPropsService.get("timelineCommentLabel");
-
-                if (fromClient) {
-                    // "<i class='ft-small'>by 88250</i>"
-                    String syncCommenterName = StringUtils.substringAfter(cc, "<i class=\"ft-small\">by ");
-                    syncCommenterName = StringUtils.substringBefore(syncCommenterName, "</i>");
-
-                    if (UserRegisterValidation.invalidUserName(syncCommenterName)) {
-                        syncCommenterName = UserExt.ANONYMOUS_USER_NAME;
-                    }
-
-                    content = content.replace("{user}", syncCommenterName);
-                } else {
-                    content = content.replace("{user}", "<a target='_blank' rel='nofollow' href='" + Latkes.getServePath()
-                            + "/member/" + commenterName + "'>" + commenterName + "</a>");
-                }
-
-                content = content.replace("{article}", "<a target='_blank' rel='nofollow' href='" + articlePermalink
-                        + "'>" + articleTitle + "</a>")
-                        .replace("{comment}", cc.replaceAll("<p>", "").replaceAll("</p>", ""));
-
-                content = Jsoup.clean(content, Whitelist.none().addAttributes("a", "href", "rel", "target"));
-                timeline.put(Common.CONTENT, content);
-
-                if (StringUtils.isNotBlank(content)) {
-                    timelineMgmtService.addTimeline(timeline);
-                }
-            }
-
             final String articleAuthorId = originalArticle.optString(Article.ARTICLE_AUTHOR_ID);
             final boolean commenterIsArticleAuthor = articleAuthorId.equals(commenterId);
 
@@ -339,7 +272,7 @@ public class CommentNotifier extends AbstractEventListener<JSONObject> {
                     final int sum = count * Pointtransfer.TRANSFER_SUM_C_AT_PARTICIPANTS;
                     if (sum > 0) {
                         pointtransferMgmtService.transfer(commenterId, Pointtransfer.ID_C_SYS,
-                                Pointtransfer.TRANSFER_TYPE_C_AT_PARTICIPANTS, sum, commentId, System.currentTimeMillis());
+                                Pointtransfer.TRANSFER_TYPE_C_AT_PARTICIPANTS, sum, commentId, System.currentTimeMillis(), "");
                     }
 
                     return;

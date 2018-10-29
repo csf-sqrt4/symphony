@@ -1,26 +1,26 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 /**
  * 前台样式.
  *
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 2.32.30.61, Jun 1, 2017
+ * @version 2.33.1.1, Aug 20, 2018
  */
 
 @import "variables";
@@ -308,10 +308,23 @@
     }
   }
 
-  #revision .pagination {
-    margin-bottom: 15px;
-    float: right;
-    border-top: 0;
+  #revision .revisions {
+    margin: 5px 0 15px;
+    text-align: center;
+    a {
+      color: $black-light;
+      vertical-align: middle;
+      &:hover {
+        color: $black-text;
+      }
+      &.disabled {
+        color: $fade;
+        cursor: default;
+      }
+    }
+    span {
+      margin: 0 10px 0 10px;
+    }
   }
 
   .editor-panel {
@@ -574,6 +587,10 @@ label.cmt-anonymous {
     }
   }
 }
+
+#reportDialog {
+  display: none;
+}
 /* end article */
 
 /* start article list */
@@ -722,6 +739,24 @@ label.cmt-anonymous {
   color: $theme-accent;
 }
 
+.recent-rss {
+  color: #ff9933 !important;
+  float: right;
+  margin: 2px 0 0 10px;
+  &:hover {
+    color: $blue !important;
+  }
+}
+
+.domain-rss {
+  color: #ff9933 !important;
+  svg {
+    vertical-align: sub;
+  }
+  &:hover {
+    color: $blue !important;
+  }
+}
 /* end article list */
 
 /* start verify */
@@ -1024,7 +1059,9 @@ code .dec {
 
 /* start chat room */
 .chat-room .online-cnt {
-  margin-top: 11px;
+  line-height: 33px;
+  margin-right: 10px;
+  color: $gray;
 }
 
 .chat-room .list {
@@ -1040,10 +1077,6 @@ code .dec {
 
 /* start index */
 .index {
-  .main {
-    padding: 0;
-  }
-
   .index-main {
     width: 60%;
   }
@@ -1084,6 +1117,9 @@ code .dec {
     color: $black-text;
     text-decoration: none;
     display: block;
+    svg  {
+      vertical-align: text-bottom;
+    }
   }
 
   .index-tabs > span.current,
@@ -1102,7 +1138,6 @@ code .dec {
 
   .index-tabs > span.perfect {
     border-bottom-color: $theme-accent;
-    flex: 2;
   }
 
   .index-tabs > span.check {
@@ -1194,11 +1229,12 @@ code .dec {
 
   .metro-item {
     flex: 1;
-    margin-bottom: 2px;
     height: 200px;
     text-align: center;
     overflow: hidden;
     position: relative;
+    margin-right: 2px;
+    margin-bottom: 2px;
 
     .preview {
       height: 100%;
@@ -1220,6 +1256,8 @@ code .dec {
     .preview img {
       transition: all 0.2s ease-out 0s;
       margin-top: -48px;
+      height: 60px;
+      width: 60px;
     }
 
     .preview:hover > img {
@@ -1234,57 +1272,37 @@ code .dec {
   }
 
   &__bottom {
-    background-color: rgba(0,0,0,.02);
-    padding: 20px 0;
-    margin-top: 5px;
-  }
-
-  .metro-item.ad img {
-    width: 100%;
-  }
-
-  .metro-item.mid {
-    margin: 0 2px 2px;
+    background-color: rgba(0, 0, 0, .02);
+    padding-top: 20px;
+    margin-top: 20px;
   }
 
   .metro-border > div {
-    height: 0;
+    height: 2px;
     flex: 1;
     background-color: $blue;
+    margin-right: 2px;
     margin-top: -2px;
   }
 
   .metro-border > div.yellow {
     background-color: #f1e05a;
-    margin: -2px 2px 2px 2px;
   }
 
   .metro-border > div.green {
     background-color: $green;
   }
 
-  .index-side.down {
-    .metro-line {
-      margin-top: 2px;
+  .metro-border > div.red {
+    background-color: $red;
+  }
 
-      .last {
-        margin-left: 2px;
-      }
-    }
+  .metro-border > div.purple {
+    background-color: #563d7c;
+  }
 
-    .metro-border div {
-      background-color: $theme-accent;
-    }
-
-    .metro-border div.purple {
-      background-color: #563d7c;
-      margin-left: 2px;
-    }
-
-    .list ul {
-      overflow: hidden;
-      height: 402px;
-    }
+  .ad img {
+    width: 100%;
   }
 }
 
@@ -1331,18 +1349,3 @@ code .dec {
   padding-top: 15px;
 }
 /* end top */
-
-/* start timeline */
-.timeline.list > ul {
-  padding-top: 0;
-}
-
-/* end timeline */
-
-/* start timeline */
-#captcha .gt_holder {
-  left: 50%;
-  margin-left: -145px;
-}
-
-/* end timeline */

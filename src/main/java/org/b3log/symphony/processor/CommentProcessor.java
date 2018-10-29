@@ -1,26 +1,25 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2017,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-2018, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
-import org.b3log.latke.logging.Level;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
 import org.b3log.latke.service.LangPropsService;
@@ -48,6 +47,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -61,6 +61,7 @@ import java.util.Set;
  * <li>Gets a comment's replies (/comment/replies), GET </li>
  * <li>Gets a comment's revisions (/commment/{id}/revisions), GET</li>
  * <li>Removes a comment (/comment/{id}/remove), POST</li>
+ * <li>Accepts a comment (/comment/accept), POST</li>
  * </ul>
  * <p>
  * The '<em>locally</em>' means user post a comment on Symphony directly rather than receiving a comment from externally
@@ -68,7 +69,7 @@ import java.util.Set;
  * </p>
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.7.1.14, Jul 4, 2017
+ * @version 1.8.0.4, Aug 7, 2018
  * @since 0.2.0
  */
 @RequestProcessor
@@ -104,18 +105,6 @@ public class CommentProcessor {
     private CommentQueryService commentQueryService;
 
     /**
-     * Client management service.
-     */
-    @Inject
-    private ClientMgmtService clientMgmtService;
-
-    /**
-     * Client query service.
-     */
-    @Inject
-    private ClientQueryService clientQueryService;
-
-    /**
      * Article query service.
      */
     @Inject
@@ -140,6 +129,61 @@ public class CommentProcessor {
     private ShortLinkQueryService shortLinkQueryService;
 
     /**
+     * Follow management service.
+     */
+    @Inject
+    private FollowMgmtService followMgmtService;
+
+    /**
+     * Accepts a comment.
+     *
+     * @param context           the specified context
+     * @param request           the specified request
+     * @param requestJSONObject the specified request json object, for example,
+     *                          {
+     *                          "commentId": ""
+     *                          }
+     */
+    @RequestProcessing(value = "/comment/accept", method = HTTPRequestMethod.POST)
+    @Before(adviceClass = {LoginCheck.class, CSRFCheck.class, PermissionCheck.class})
+    public void acceptComment(final HTTPRequestContext context, final HttpServletRequest request, final JSONObject requestJSONObject) {
+        context.renderJSON();
+
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
+        final String userId = currentUser.optString(Keys.OBJECT_ID);
+        final String commentId = requestJSONObject.optString(Comment.COMMENT_T_ID);
+
+        try {
+            final JSONObject comment = commentQueryService.getComment(commentId);
+            if (null == comment) {
+                context.renderFalseResult().renderMsg("Not found comment to accept");
+
+                return;
+            }
+            final String commentAuthorId = comment.optString(Comment.COMMENT_AUTHOR_ID);
+            if (StringUtils.equals(userId, commentAuthorId)) {
+                context.renderFalseResult().renderMsg(langPropsService.get("thankSelfLabel"));
+
+                return;
+            }
+
+            final String articleId = comment.optString(Comment.COMMENT_ON_ARTICLE_ID);
+            final JSONObject article = articleQueryService.getArticle(articleId);
+            if (!StringUtils.equals(userId, article.optString(Article.ARTICLE_AUTHOR_ID))) {
+                context.renderFalseResult().renderMsg(langPropsService.get("sc403Label"));
+
+                return;
+            }
+
+            commentMgmtService.acceptComment(commentId);
+
+            context.renderTrueResult();
+        } catch (final ServiceException e) {
+            context.renderMsg(e.getMessage());
+        }
+    }
+
+    /**
      * Removes a comment.
      *
      * @param context  the specified context
@@ -158,7 +202,7 @@ public class CommentProcessor {
             return;
         }
 
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         final String currentUserId = currentUser.optString(Keys.OBJECT_ID);
         final JSONObject comment = commentQueryService.getComment(id);
         if (null == comment) {
@@ -228,7 +272,7 @@ public class CommentProcessor {
                 return;
             }
 
-            final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+            final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
             if (!currentUser.optString(Keys.OBJECT_ID).equals(comment.optString(Comment.COMMENT_AUTHOR_ID))) {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN);
 
@@ -236,6 +280,7 @@ public class CommentProcessor {
             }
 
             context.renderJSONValue(Comment.COMMENT_CONTENT, comment.optString(Comment.COMMENT_CONTENT));
+            context.renderJSONValue(Comment.COMMENT_VISIBLE, comment.optInt(Comment.COMMENT_VISIBLE));
             context.renderJSONValue(Keys.STATUS_CODE, StatusCodes.SUCC);
         } catch (final ServiceException e) {
             context.renderMsg(e.getMessage());
@@ -248,7 +293,8 @@ public class CommentProcessor {
      * The request json object:
      * <pre>
      * {
-     *     "commentContent": ""
+     *     "commentContent": "",
+     *     "commentVisible": boolean
      * }
      * </pre>
      * </p>
@@ -272,7 +318,7 @@ public class CommentProcessor {
                 return;
             }
 
-            final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+            final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
             if (!currentUser.optString(Keys.OBJECT_ID).equals(comment.optString(Comment.COMMENT_AUTHOR_ID))) {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN);
 
@@ -282,8 +328,9 @@ public class CommentProcessor {
             final JSONObject requestJSONObject = (JSONObject) request.getAttribute(Keys.REQUEST);
 
             String commentContent = requestJSONObject.optString(Comment.COMMENT_CONTENT);
+            final boolean isOnlyAuthorVisible = requestJSONObject.optBoolean(Comment.COMMENT_VISIBLE);
             final String ip = Requests.getRemoteAddr(request);
-            final String ua = request.getHeader(Common.USER_AGENT);
+            final String ua = Headers.getHeader(request, Common.USER_AGENT, "");
 
             comment.put(Comment.COMMENT_CONTENT, commentContent);
             comment.put(Comment.COMMENT_IP, "");
@@ -294,6 +341,8 @@ public class CommentProcessor {
             if (StringUtils.isNotBlank(ua)) {
                 comment.put(Comment.COMMENT_UA, ua);
             }
+            comment.put(Comment.COMMENT_VISIBLE, isOnlyAuthorVisible
+                    ? Comment.COMMENT_VISIBLE_C_AUTHOR : Comment.COMMENT_VISIBLE_C_ALL);
 
             commentMgmtService.updateComment(comment.optString(Keys.OBJECT_ID), comment);
 
@@ -317,24 +366,23 @@ public class CommentProcessor {
     /**
      * Gets a comment's original comment.
      *
-     * @param context  the specified context
-     * @param request  the specified request
-     * @param response the specified response
-     * @throws Exception exception
+     * @param context the specified context
+     * @param request the specified request
      */
     @RequestProcessing(value = "/comment/original", method = HTTPRequestMethod.POST)
-    public void getOriginalComment(final HTTPRequestContext context,
-                                   final HttpServletRequest request, final HttpServletResponse response) throws Exception {
+    public void getOriginalComment(final HTTPRequestContext context, final HttpServletRequest request) {
         final JSONObject requestJSONObject = Requests.parseRequestJSONObject(request, context.getResponse());
         final String commentId = requestJSONObject.optString(Comment.COMMENT_T_ID);
         int commentViewMode = requestJSONObject.optInt(UserExt.USER_COMMENT_VIEW_MODE);
         int avatarViewMode = UserExt.USER_AVATAR_VIEW_MODE_C_ORIGINAL;
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
+        String currentUserId = null;
         if (null != currentUser) {
             avatarViewMode = currentUser.optInt(UserExt.USER_AVATAR_VIEW_MODE);
+            currentUserId = currentUser.optString(Keys.OBJECT_ID);
         }
 
-        final JSONObject originalCmt = commentQueryService.getOriginalComment(avatarViewMode, commentViewMode, commentId);
+        final JSONObject originalCmt = commentQueryService.getOriginalComment(currentUserId, avatarViewMode, commentViewMode, commentId);
 
         // Fill thank
         final String originalCmtId = originalCmt.optString(Keys.OBJECT_ID);
@@ -347,7 +395,7 @@ public class CommentProcessor {
 
         originalCmt.put(Common.REWARED_COUNT, rewardQueryService.rewardedCount(originalCmtId, Reward.TYPE_C_COMMENT));
 
-        context.renderJSON(true).renderJSONValue(Comment.COMMENT_T_REPLIES, (Object) originalCmt);
+        context.renderJSON(true).renderJSONValue(Comment.COMMENT_T_REPLIES, originalCmt);
     }
 
     /**
@@ -356,21 +404,28 @@ public class CommentProcessor {
      * @param context  the specified context
      * @param request  the specified request
      * @param response the specified response
-     * @throws Exception exception
      */
     @RequestProcessing(value = "/comment/replies", method = HTTPRequestMethod.POST)
     public void getReplies(final HTTPRequestContext context,
-                           final HttpServletRequest request, final HttpServletResponse response) throws Exception {
+                           final HttpServletRequest request, final HttpServletResponse response) {
         final JSONObject requestJSONObject = Requests.parseRequestJSONObject(request, context.getResponse());
         final String commentId = requestJSONObject.optString(Comment.COMMENT_T_ID);
         int commentViewMode = requestJSONObject.optInt(UserExt.USER_COMMENT_VIEW_MODE);
         int avatarViewMode = UserExt.USER_AVATAR_VIEW_MODE_C_ORIGINAL;
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
+        String currentUserId = null;
         if (null != currentUser) {
             avatarViewMode = currentUser.optInt(UserExt.USER_AVATAR_VIEW_MODE);
+            currentUserId = currentUser.optString(Keys.OBJECT_ID);
         }
 
-        final List<JSONObject> replies = commentQueryService.getReplies(avatarViewMode, commentViewMode, commentId);
+        if (StringUtils.isBlank(commentId)) {
+            context.renderJSON(true).renderJSONValue(Comment.COMMENT_T_REPLIES, Collections.emptyList());
+
+            return;
+        }
+
+        final List<JSONObject> replies = commentQueryService.getReplies(currentUserId, avatarViewMode, commentViewMode, commentId);
 
         // Fill reply thank
         for (final JSONObject reply : replies) {
@@ -385,7 +440,7 @@ public class CommentProcessor {
             reply.put(Common.REWARED_COUNT, rewardQueryService.rewardedCount(replyId, Reward.TYPE_C_COMMENT));
         }
 
-        context.renderJSON(true).renderJSONValue(Comment.COMMENT_T_REPLIES, (Object) replies);
+        context.renderJSON(true).renderJSONValue(Comment.COMMENT_T_REPLIES, replies);
     }
 
     /**
@@ -397,6 +452,7 @@ public class CommentProcessor {
      *     "articleId": "",
      *     "commentContent": "",
      *     "commentAnonymous": boolean,
+     *     "commentVisible": boolean,
      *     "commentOriginalCommentId": "", // optional
      *     "userCommentViewMode": int
      * }
@@ -407,12 +463,11 @@ public class CommentProcessor {
      * @param request  the specified request
      * @param response the specified response
      * @throws IOException      io exception
-     * @throws ServletException servlet exception
      */
     @RequestProcessing(value = "/comment", method = HTTPRequestMethod.POST)
-    @Before(adviceClass = {CSRFCheck.class, CommentAddValidation.class, PermissionCheck.class})
+    @Before(adviceClass = {CSRFCheck.class, LoginCheck.class, CommentAddValidation.class, PermissionCheck.class})
     public void addComment(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws IOException, ServletException {
+            throws IOException {
         context.renderJSON().renderJSONValue(Keys.STATUS_CODE, StatusCodes.ERR);
 
         final JSONObject requestJSONObject = (JSONObject) request.getAttribute(Keys.REQUEST);
@@ -422,9 +477,10 @@ public class CommentProcessor {
         final String commentOriginalCommentId = requestJSONObject.optString(Comment.COMMENT_ORIGINAL_COMMENT_ID);
         final int commentViewMode = requestJSONObject.optInt(UserExt.USER_COMMENT_VIEW_MODE);
         final String ip = Requests.getRemoteAddr(request);
-        final String ua = request.getHeader(Common.USER_AGENT);
+        final String ua = Headers.getHeader(request, Common.USER_AGENT, "");
 
-        final boolean isAnonymous = requestJSONObject.optBoolean(Comment.COMMENT_ANONYMOUS, false);
+        final boolean isAnonymous = requestJSONObject.optBoolean(Comment.COMMENT_ANONYMOUS);
+        final boolean isOnlyAuthorVisible = requestJSONObject.optBoolean(Comment.COMMENT_VISIBLE);
 
         final JSONObject comment = new JSONObject();
         comment.put(Comment.COMMENT_CONTENT, commentContent);
@@ -441,13 +497,7 @@ public class CommentProcessor {
         comment.put(Comment.COMMENT_ORIGINAL_COMMENT_ID, commentOriginalCommentId);
 
         try {
-            final JSONObject currentUser = userQueryService.getCurrentUser(request);
-            if (null == currentUser) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN);
-
-                return;
-            }
-
+            final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
             final String currentUserName = currentUser.optString(User.USER_NAME);
             final JSONObject article = articleQueryService.getArticle(articleId);
             final String articleContent = article.optString(Article.ARTICLE_CONTENT);
@@ -474,12 +524,20 @@ public class CommentProcessor {
                 }
             }
 
-            comment.put(Comment.COMMENT_AUTHOR_ID, currentUser.optString(Keys.OBJECT_ID));
-            comment.put(Comment.COMMENT_T_COMMENTER, currentUser);
+            final String commentAuthorId = currentUser.optString(Keys.OBJECT_ID);
+            comment.put(Comment.COMMENT_AUTHOR_ID, commentAuthorId);
             comment.put(Comment.COMMENT_ANONYMOUS, isAnonymous
                     ? Comment.COMMENT_ANONYMOUS_C_ANONYMOUS : Comment.COMMENT_ANONYMOUS_C_PUBLIC);
+            comment.put(Comment.COMMENT_VISIBLE, isOnlyAuthorVisible
+                    ? Comment.COMMENT_VISIBLE_C_AUTHOR : Comment.COMMENT_VISIBLE_C_ALL);
 
             commentMgmtService.addComment(comment);
+
+            if ((!commentAuthorId.equals(articleAuthorId) &&
+                    UserExt.USER_XXX_STATUS_C_ENABLED == currentUser.optInt(UserExt.USER_REPLY_WATCH_ARTICLE_STATUS))
+                    || Article.ARTICLE_TYPE_C_DISCUSSION == article.optInt(Article.ARTICLE_TYPE)) {
+                followMgmtService.watchArticle(commentAuthorId, articleId);
+            }
 
             context.renderJSONValue(Keys.STATUS_CODE, StatusCodes.SUCC);
         } catch (final ServiceException e) {
@@ -489,38 +547,20 @@ public class CommentProcessor {
 
     /**
      * Thanks a comment.
-     * <p>
-     * The request json object:
-     * <pre>
-     * {
-     *     "commentId": "",
-     * }
-     * </pre>
-     * </p>
      *
-     * @param context  the specified context
-     * @param request  the specified request
-     * @param response the specified response
-     * @throws IOException      io exception
-     * @throws ServletException servlet exception
+     * @param context           the specified context
+     * @param request           the specified request
+     * @param requestJSONObject the specified request json object, for example,
+     *                          {
+     *                          "commentId": ""
+     *                          }
      */
     @RequestProcessing(value = "/comment/thank", method = HTTPRequestMethod.POST)
     @Before(adviceClass = {LoginCheck.class, CSRFCheck.class, PermissionCheck.class})
-    public void thankComment(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws IOException, ServletException {
+    public void thankComment(final HTTPRequestContext context, final HttpServletRequest request, final JSONObject requestJSONObject) {
         context.renderJSON();
 
-        JSONObject requestJSONObject;
-        try {
-            requestJSONObject = Requests.parseRequestJSONObject(request, context.getResponse());
-            request.setAttribute(Keys.REQUEST, requestJSONObject);
-        } catch (final Exception e) {
-            LOGGER.log(Level.ERROR, "Thank comment error", e);
-
-            return;
-        }
-
-        final JSONObject currentUser = (JSONObject) request.getAttribute(User.USER);
+        final JSONObject currentUser = (JSONObject) request.getAttribute(Common.CURRENT_USER);
         final String commentId = requestJSONObject.optString(Comment.COMMENT_T_ID);
 
         try {
